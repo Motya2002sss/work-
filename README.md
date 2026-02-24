@@ -9,6 +9,7 @@
 
 - Frontend: `index.html`, `styles.css`, `app.js` (чистый JS)
 - Страница заказа блюда: `dish.html`, `dish.js`
+- Кабинет повара: `cook.html`, `cook.js`
 - Backend: `backend/server.py` (Python stdlib, без внешних зависимостей)
 - Хранилище MVP: JSON-файлы в `backend/data`
 
@@ -28,6 +29,7 @@ http://127.0.0.1:8080
 
 - `GET /api/health` - проверка сервиса
 - `GET /api/dishes` - блюда с фильтрами (`district`, `categories`, `delivery`, `min_rating`, `max_price`, `search`, `sort`)
+- `POST /api/dishes` - публикация блюда поваром (multipart: фото, цена, граммовка)
 - `GET /api/dishes/<id>` - карточка блюда + повар + рекомендации
 - `GET /api/cooks` - список поваров
 - `GET /api/cooks/map` - точки поваров (`lat/lng`) для подключения карты
@@ -42,6 +44,7 @@ http://127.0.0.1:8080
 ```text
 .
 ├── backend/
+│   ├── uploads/
 │   ├── server.py
 │   └── data/
 │       ├── dishes.json
@@ -50,8 +53,12 @@ http://127.0.0.1:8080
 │       ├── orders.json
 │       └── runtime/
 ├── index.html
+├── dish.html
+├── cook.html
 ├── styles.css
 ├── app.js
+├── dish.js
+├── cook.js
 └── README.md
 ```
 
@@ -61,6 +68,7 @@ http://127.0.0.1:8080
 - Фильтрация, сортировка, поиск
 - Провал в карточку блюда и оформление заказа через API
 - Подготовка к карте: точки поваров по районам Москвы
+- Повар может добавить блюдо с фото, граммовкой и своей ценой
 - Блоки подписки, верификации, рейтинга и доставки
 
 ## Следующий этап (когда начнем "приложение")

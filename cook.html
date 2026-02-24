@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ДомЕда — кабинет повара</title>
+    <meta
+      name="description"
+      content="Кабинет повара в ДомЕда: добавление блюда с фото, граммовкой и ценой."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&family=Unbounded:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">ДомЕда</span>
+          <span class="brand-sub">Кабинет повара</span>
+        </div>
+        <nav class="nav">
+          <a href="/index.html#market">Витрина</a>
+          <a href="/index.html#cook-map">Где повара</a>
+        </nav>
+        <div class="topbar-actions">
+          <a class="btn ghost" href="/index.html">На главную</a>
+        </div>
+      </header>
+
+      <main>
+        <section class="section cook-page">
+          <div class="section-head">
+            <div>
+              <h2>Добавить блюдо</h2>
+              <p>Повар сам загружает фото, ставит цену и указывает граммовку.</p>
+            </div>
+          </div>
+
+          <div class="cook-layout">
+            <article class="cook-card-form">
+              <form id="cookDishForm" class="cook-form" enctype="multipart/form-data">
+                <label>
+                  Повар
+                  <select name="cook_id" id="cookSelect" required>
+                    <option value="">Загрузка списка поваров...</option>
+                  </select>
+                </label>
+
+                <label>
+                  Название блюда
+                  <input name="title" type="text" required placeholder="Например: Домашние котлеты" />
+                </label>
+
+                <label>
+                  Описание
+                  <textarea
+                    name="description"
+                    rows="3"
+                    placeholder="Кратко опишите состав и подачу"
+                  ></textarea>
+                </label>
+
+                <div class="cook-form-grid">
+                  <label>
+                    Цена (₽)
+                    <input name="price" type="number" min="50" step="10" required placeholder="450" />
+                  </label>
+                  <label>
+                    Граммовка (г)
+                    <input
+                      name="portion_grams"
+                      type="number"
+                      min="50"
+                      step="10"
+                      required
+                      placeholder="420"
+                    />
+                  </label>
+                  <label>
+                    Время приготовления (мин)
+                    <input
+                      name="wait_minutes"
+                      type="number"
+                      min="10"
+                      step="5"
+                      value="40"
+                      required
+                    />
+                  </label>
+                </div>
+
+                <label>
+                  Категории
+                  <select name="tags" multiple size="5">
+                    <option value="hot">Горячее</option>
+                    <option value="soup">Супы</option>
+                    <option value="dessert">Десерты</option>
+                    <option value="healthy">ПП</option>
+                    <option value="comfort">Домашнее</option>
+                  </select>
+                  <span class="field-note">Выберите одну или несколько категорий</span>
+                </label>
+
+                <fieldset>
+                  <legend>Способы доставки</legend>
+                  <label class="radio-row">
+                    <input type="checkbox" name="delivery" value="pickup" checked />
+                    Самовывоз
+                  </label>
+                  <label class="radio-row">
+                    <input type="checkbox" name="delivery" value="cook" />
+                    Доставка поваром
+                  </label>
+                  <label class="radio-row">
+                    <input type="checkbox" name="delivery" value="courier" />
+                    Курьер на день
+                  </label>
+                </fieldset>
+
+                <label>
+                  Фото блюда
+                  <input id="imageInput" name="image" type="file" accept="image/png,image/jpeg,image/webp" required />
+                  <span class="field-note">PNG/JPG/WEBP, до 6 MB</span>
+                </label>
+
+                <button class="btn full" type="submit">Опубликовать блюдо</button>
+              </form>
+            </article>
+
+            <article class="cook-preview-card">
+              <h3>Предпросмотр</h3>
+              <div class="cook-preview-image-wrap">
+                <img id="previewImage" class="cook-preview-image" alt="Предпросмотр блюда" hidden />
+                <div id="previewPlaceholder" class="cook-preview-placeholder">
+                  Фото появится после загрузки файла
+                </div>
+              </div>
+              <div class="cook-preview-meta" id="previewMeta">
+                Заполните форму слева, чтобы проверить карточку перед публикацией.
+              </div>
+              <div class="cook-success" id="cookSuccess"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <div>
+          <div class="brand-mark">ДомЕда</div>
+          <div class="footer-meta">Публикация блюд поварами · Москва</div>
+        </div>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast">Блюдо опубликовано.</div>
+
+    <script src="cook.js"></script>
+  </body>
+</html>

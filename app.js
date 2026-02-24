@@ -73,7 +73,24 @@ const buildDishesQuery = () => {
 const renderDish = (dish) => {
   const card = document.createElement("article");
   card.className = "dish-card";
+  const imageBlock = dish.image_url
+    ? `
+      <img
+        class="dish-image"
+        src="${dish.image_url}"
+        alt="${dish.title}"
+        onerror="this.closest('.dish-image-wrap').classList.add('dish-image-missing')"
+      />
+      <span class="dish-image-fallback">Фото недоступно</span>
+    `
+    : `
+      <div class="dish-image-empty">Фото скоро загрузят</div>
+    `;
+
   card.innerHTML = `
+    <div class="dish-image-wrap">
+      ${imageBlock}
+    </div>
     <div class="dish-meta">
       <span>${dish.cook}</span>
       <span>${dish.district}</span>

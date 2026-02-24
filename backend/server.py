@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import cgi
 import json
 import mimetypes
 from datetime import datetime, timezone
@@ -11,17 +12,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(__file__).resolve().parent / "data"
 RUNTIME_DIR = DATA_DIR / "runtime"
+UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
+MAX_IMAGE_BYTES = 6 * 1024 * 1024
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 STATIC_FILES = {
     "/": "index.html",
     "/index.html": "index.html",
     "/dish.html": "dish.html",
+    "/cook.html": "cook.html",
     "/styles.css": "styles.css",
     "/app.js": "app.js",
     "/dish.js": "dish.js",
+    "/cook.js": "cook.js",
 }
 
 
@@ -41,6 +48,25 @@ def write_json(filename: str, payload: Any) -> None:
     path = DATA_DIR / filename
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
+
+
+def read_dishes() -> List[Dict[str, Any]]:
+    runtime_file = RUNTIME_DIR / "dishes.json"
+    if runtime_file.exists():
+        try:
+            with runtime_file.open("r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except (json.JSONDecodeError, OSError):
+            return []
+
+    return read_json("dishes.json", [])
+
+
+def write_dishes(dishes: List[Dict[str, Any]]) -> None:
+    runtime_file = RUNTIME_DIR / "dishes.json"
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    with runtime_file.open("w", encoding="utf-8") as handle:
+        json.dump(dishes, handle, ensure_ascii=False, indent=2)
 
 
 def read_orders() -> List[Dict[str, Any]]:
@@ -84,6 +110,40 @@ def safe_int(value: str, fallback: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return fallback
+
+
+def clean_str(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def next_dish_id(dishes: List[Dict[str, Any]]) -> int:
+    if not dishes:
+        return 1
+    max_id = max(safe_int(str(item.get("id", 0)), 0) for item in dishes)
+    return max_id + 1
+
+
+def cook_delivery_modes(cook: Dict[str, Any]) -> List[str]:
+    delivery = cook.get("delivery_modes") or []
+    if isinstance(delivery, list) and delivery:
+        return [str(item) for item in delivery]
+    return ["pickup"]
+
+
+def detect_image_extension(filename: str, content_type: str) -> str:
+    ext = Path(filename or "").suffix.lower()
+    if ext in ALLOWED_IMAGE_EXTENSIONS:
+        return ext
+
+    fallback_map = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+    }
+    return fallback_map.get(content_type, "")
 
 
 def map_cook_points(cooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -132,6 +192,10 @@ class AppHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
 
+        if parsed.path == "/api/dishes":
+            self.handle_create_dish()
+            return
+
         if parsed.path == "/api/orders":
             self.handle_create_order()
             return
@@ -169,7 +233,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 self.send_json(HTTPStatus.BAD_REQUEST, {"error": "dish_id_invalid"})
                 return
 
-            dishes = read_json("dishes.json", [])
+            dishes = read_dishes()
             cooks = read_json("cooks.json", [])
             dish = next((item for item in dishes if item.get("id") == dish_id), None)
             if not dish:
@@ -234,7 +298,7 @@ class AppHandler(BaseHTTPRequestHandler):
         return next((item for item in cooks if item.get("name") == cook_name), None)
 
     def filtered_dishes(self, query: Dict[str, List[str]]) -> List[Dict[str, Any]]:
-        dishes = read_json("dishes.json", [])
+        dishes = read_dishes()
 
         district = self.query_value(query, "district", "all")
         categories = csv_set(self.query_value(query, "categories", ""))
@@ -282,6 +346,128 @@ class AppHandler(BaseHTTPRequestHandler):
 
         return dishes
 
+    def handle_create_dish(self) -> None:
+        content_type = self.headers.get("Content-Type", "")
+        if not content_type.startswith("multipart/form-data"):
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "multipart_required"})
+            return
+
+        form = self.read_multipart_form()
+        if form is None:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_form_data"})
+            return
+
+        title = clean_str(form.getvalue("title"))
+        description = clean_str(form.getvalue("description"))
+        cook_id = safe_int(clean_str(form.getvalue("cook_id")), -1)
+        price = safe_int(clean_str(form.getvalue("price")), 0)
+        grams = safe_int(clean_str(form.getvalue("portion_grams")), 0)
+        wait_minutes = safe_int(clean_str(form.getvalue("wait_minutes")), 40)
+        tags = {clean_str(item) for item in form.getlist("tags") if clean_str(item)}
+        delivery = {clean_str(item) for item in form.getlist("delivery") if clean_str(item)}
+        allowed_delivery = {"pickup", "cook", "courier"}
+
+        if not title:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "title_required"})
+            return
+        if cook_id <= 0:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "cook_id_required"})
+            return
+        if price <= 0:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "price_invalid"})
+            return
+        if grams <= 0:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "portion_grams_invalid"})
+            return
+        if wait_minutes <= 0:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "wait_minutes_invalid"})
+            return
+        if delivery and not delivery.issubset(allowed_delivery):
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "delivery_invalid"})
+            return
+
+        cooks = read_json("cooks.json", [])
+        cook = next((item for item in cooks if item.get("id") == cook_id), None)
+        if not cook:
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "cook_not_found"})
+            return
+
+        image_field = form["image"] if "image" in form else None
+        image_result = self.save_uploaded_image(image_field)
+        if image_result.get("error"):
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": image_result["error"]})
+            return
+
+        image_url = image_result.get("image_url", "")
+        if not image_url:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "image_required"})
+            return
+
+        dishes = read_dishes()
+        dish = {
+            "id": next_dish_id(dishes),
+            "cook_id": cook.get("id"),
+            "title": title,
+            "cook": cook.get("name"),
+            "district": cook.get("district", "Москва"),
+            "rating": cook.get("rating", 0),
+            "price": price,
+            "tags": sorted(tags) if tags else ["hot"],
+            "delivery": sorted(delivery) if delivery else cook_delivery_modes(cook),
+            "wait": f"{wait_minutes} мин",
+            "description": description or "Домашнее блюдо от локального повара.",
+            "portion": f"{grams} г",
+            "image_url": image_url,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        dishes.append(dish)
+        write_dishes(dishes)
+
+        self.send_json(HTTPStatus.CREATED, {"dish": dish})
+
+    def save_uploaded_image(self, image_field: Any) -> Dict[str, Any]:
+        if image_field is None:
+            return {"error": "image_required"}
+        if not getattr(image_field, "filename", ""):
+            return {"error": "image_required"}
+
+        extension = detect_image_extension(
+            clean_str(getattr(image_field, "filename", "")),
+            clean_str(getattr(image_field, "type", "")),
+        )
+        if not extension:
+            return {"error": "image_format_not_supported"}
+
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:10]}{extension}"
+        target = UPLOADS_DIR / filename
+
+        source = getattr(image_field, "file", None)
+        if source is None:
+            return {"error": "image_invalid"}
+
+        total_size = 0
+        try:
+            with target.open("wb") as handle:
+                while True:
+                    chunk = source.read(64 * 1024)
+                    if not chunk:
+                        break
+                    total_size += len(chunk)
+                    if total_size > MAX_IMAGE_BYTES:
+                        handle.close()
+                        target.unlink(missing_ok=True)
+                        return {"error": "image_too_large"}
+                    handle.write(chunk)
+        except OSError:
+            return {"error": "image_save_failed"}
+
+        if total_size == 0:
+            target.unlink(missing_ok=True)
+            return {"error": "image_invalid"}
+
+        return {"image_url": f"/uploads/{filename}"}
+
     def handle_create_order(self) -> None:
         payload = self.read_json_body()
         dish_id = payload.get("dish_id")
@@ -296,7 +482,7 @@ class AppHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "dish_id_invalid"})
             return
 
-        dishes = read_json("dishes.json", [])
+        dishes = read_dishes()
         dish = next((item for item in dishes if item.get("id") == dish_id), None)
         if not dish:
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "dish_not_found"})
@@ -371,6 +557,10 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_json(HTTPStatus.CREATED, {"verification": request_data})
 
     def serve_static(self, path: str) -> None:
+        if path.startswith("/uploads/"):
+            self.serve_upload(path)
+            return
+
         target_name = STATIC_FILES.get(path)
         if not target_name:
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
@@ -395,6 +585,55 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+    def serve_upload(self, path: str) -> None:
+        filename = Path(path).name
+        if not filename:
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+            return
+
+        target = UPLOADS_DIR / filename
+        if not target.exists() or not target.is_file():
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "file_not_found"})
+            return
+
+        mime = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        try:
+            body = target.read_bytes()
+        except OSError:
+            self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "file_read_error"})
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def read_multipart_form(self) -> Optional[cgi.FieldStorage]:
+        content_length = safe_int(self.headers.get("Content-Length", "0"), 0)
+        if content_length <= 0:
+            return None
+        if content_length > (MAX_IMAGE_BYTES + 1024 * 1024):
+            return None
+
+        environ = {
+            "REQUEST_METHOD": "POST",
+            "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+            "CONTENT_LENGTH": str(content_length),
+        }
+
+        try:
+            return cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ=environ,
+                keep_blank_values=True,
+            )
+        except (TypeError, ValueError):
+            return None
 
     def read_json_body(self) -> Dict[str, Any]:
         size = int(self.headers.get("Content-Length", "0"))
@@ -430,7 +669,7 @@ def run() -> None:
     server = ThreadingHTTPServer((host, port), AppHandler)
     print(f"DomEda MVP server running on http://{host}:{port}")
     print(
-        "Endpoints: /api/health, /api/dishes, /api/dishes/<id>, /api/cooks, "
+        "Endpoints: /api/health, /api/dishes (GET/POST), /api/dishes/<id>, /api/cooks, "
         "/api/cooks/map, /api/subscriptions, /api/orders"
     )
 

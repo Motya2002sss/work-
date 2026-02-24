@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .DS_Store
 backend/data/runtime/*.json
+backend/uploads/*
+!backend/uploads/.gitkeep
