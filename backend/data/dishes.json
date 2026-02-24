@@ -1,0 +1,90 @@
+[
+  {
+    "id": 1,
+    "title": "Курица с пюре",
+    "cook": "Светлана К.",
+    "district": "ЮЗАО",
+    "rating": 4.9,
+    "price": 450,
+    "tags": ["hot", "comfort"],
+    "delivery": ["pickup", "cook"],
+    "wait": "45 мин"
+  },
+  {
+    "id": 2,
+    "title": "Борщ с пампушками",
+    "cook": "Ирина П.",
+    "district": "САО",
+    "rating": 4.7,
+    "price": 380,
+    "tags": ["soup"],
+    "delivery": ["pickup"],
+    "wait": "35 мин"
+  },
+  {
+    "id": 3,
+    "title": "Сырники с ягодами",
+    "cook": "Татьяна М.",
+    "district": "ЦАО",
+    "rating": 4.8,
+    "price": 320,
+    "tags": ["dessert"],
+    "delivery": ["pickup", "courier"],
+    "wait": "25 мин"
+  },
+  {
+    "id": 4,
+    "title": "Поке с лососем",
+    "cook": "Арман М.",
+    "district": "ЦАО",
+    "rating": 4.8,
+    "price": 690,
+    "tags": ["healthy"],
+    "delivery": ["cook", "courier"],
+    "wait": "40 мин"
+  },
+  {
+    "id": 5,
+    "title": "Лазанья домашняя",
+    "cook": "Алина Р.",
+    "district": "ЮЗАО",
+    "rating": 4.6,
+    "price": 520,
+    "tags": ["hot"],
+    "delivery": ["pickup", "cook"],
+    "wait": "50 мин"
+  },
+  {
+    "id": 6,
+    "title": "Суп-пюре тыквенный",
+    "cook": "Мария С.",
+    "district": "СВАО",
+    "rating": 4.5,
+    "price": 310,
+    "tags": ["soup", "healthy"],
+    "delivery": ["pickup", "courier"],
+    "wait": "30 мин"
+  },
+  {
+    "id": 7,
+    "title": "Плов узбекский",
+    "cook": "Арман М.",
+    "district": "ЦАО",
+    "rating": 4.9,
+    "price": 560,
+    "tags": ["hot"],
+    "delivery": ["cook", "courier"],
+    "wait": "45 мин"
+  },
+  {
+    "id": 8,
+    "title": "Гречка с котлетами",
+    "cook": "Светлана К.",
+    "district": "ЮЗАО",
+    "rating": 4.7,
+    "price": 390,
+    "tags": ["hot"],
+    "delivery": ["pickup"],
+    "wait": "35 мин"
+  }
+]
