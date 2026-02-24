@@ -15,8 +15,11 @@ const resetButton = document.getElementById("resetFilters");
 const districtSelect = document.getElementById("district");
 const sortSelect = document.getElementById("sort");
 const searchInput = document.getElementById("searchInput");
-const toast = document.getElementById("toast");
+const mapPoints = document.getElementById("mapPoints");
+const mapStatus = document.getElementById("mapStatus");
+
 let dishesRequestId = 0;
+let mapRequestId = 0;
 
 const labelTag = (tag) => {
   const map = {
@@ -38,16 +41,7 @@ const labelDelivery = (mode) => {
   return map[mode] || mode;
 };
 
-const showToast = (text) => {
-  toast.textContent = text;
-  toast.classList.add("show");
-  window.clearTimeout(window.__toastTimer);
-  window.__toastTimer = window.setTimeout(() => {
-    toast.classList.remove("show");
-  }, 2800);
-};
-
-const buildQuery = () => {
+const buildDishesQuery = () => {
   const params = new URLSearchParams();
   params.set("max_price", String(filters.maxPrice));
 
@@ -76,30 +70,6 @@ const buildQuery = () => {
   return params.toString();
 };
 
-const createOrder = async (dish) => {
-  const fallbackMode = (dish.delivery && dish.delivery[0]) || "pickup";
-
-  const response = await fetch("/api/orders", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      dish_id: dish.id,
-      customer_name: "Покупатель",
-      city: "Москва",
-      delivery_mode: fallbackMode,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("order_request_failed");
-  }
-
-  const payload = await response.json();
-  return payload.order;
-};
-
 const renderDish = (dish) => {
   const card = document.createElement("article");
   card.className = "dish-card";
@@ -121,18 +91,9 @@ const renderDish = (dish) => {
     </div>
     <div class="dish-actions">
       <strong>${dish.price} ₽</strong>
-      <button class="btn small" data-add>Заказать</button>
+      <a class="btn small" href="/dish.html?id=${dish.id}">Открыть</a>
     </div>
   `;
-
-  card.querySelector("[data-add]").addEventListener("click", async () => {
-    try {
-      const order = await createOrder(dish);
-      showToast(`Заказ ${order.id} создан`);
-    } catch (error) {
-      showToast("Ошибка заказа. Повторите позже.");
-    }
-  });
 
   return card;
 };
@@ -149,7 +110,7 @@ const renderError = () => {
   dishGrid.innerHTML = "";
   const state = document.createElement("div");
   state.className = "dish-card";
-  state.innerHTML = "<h3>Сервер недоступен</h3><p>Запустите backend: `python3 backend/server.py`.</p>";
+  state.innerHTML = "<h3>Сервер недоступен</h3><p>Запустите backend: <code>python3 backend/server.py</code>.</p>";
   dishGrid.appendChild(state);
 };
 
@@ -174,7 +135,7 @@ const fetchDishes = async () => {
   renderLoading();
 
   try {
-    const query = buildQuery();
+    const query = buildDishesQuery();
     const response = await fetch(`/api/dishes?${query}`);
     if (!response.ok) {
       throw new Error("dishes_request_failed");
@@ -190,6 +151,92 @@ const fetchDishes = async () => {
       return;
     }
     renderError();
+  }
+};
+
+const renderMapLoading = () => {
+  if (!mapStatus || !mapPoints) {
+    return;
+  }
+  mapStatus.textContent = "Загружаем точки поваров...";
+  mapPoints.innerHTML = "";
+};
+
+const renderMapError = () => {
+  if (!mapStatus || !mapPoints) {
+    return;
+  }
+  mapStatus.textContent = "Не удалось загрузить точки. Проверьте API.";
+  mapPoints.innerHTML = "";
+};
+
+const renderMapPoints = (items) => {
+  if (!mapStatus || !mapPoints) {
+    return;
+  }
+
+  mapPoints.innerHTML = "";
+  mapStatus.textContent = `Найдено точек: ${items.length}`;
+
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "map-point";
+    empty.textContent = "В выбранном районе пока нет поваров.";
+    mapPoints.appendChild(empty);
+    return;
+  }
+
+  items.forEach((point) => {
+    const item = document.createElement("article");
+    item.className = "map-point";
+    item.innerHTML = `
+      <div class="map-point-head">
+        <strong>${point.name}</strong>
+        <span>${point.district}</span>
+      </div>
+      <div class="map-point-body">
+        <div>Рейтинг: ${Number(point.rating).toFixed(1)}</div>
+        <div>${point.label}</div>
+        <div>Координаты: ${point.lat}, ${point.lng}</div>
+      </div>
+    `;
+    mapPoints.appendChild(item);
+  });
+};
+
+const fetchMapPoints = async () => {
+  if (!mapStatus || !mapPoints) {
+    return;
+  }
+
+  const requestId = ++mapRequestId;
+  renderMapLoading();
+
+  try {
+    const params = new URLSearchParams();
+    if (filters.district !== "all") {
+      params.set("district", filters.district);
+    }
+
+    const query = params.toString();
+    const url = query ? `/api/cooks/map?${query}` : "/api/cooks/map";
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error("map_request_failed");
+    }
+
+    const payload = await response.json();
+    if (requestId !== mapRequestId) {
+      return;
+    }
+
+    renderMapPoints(payload.items || []);
+  } catch (error) {
+    if (requestId !== mapRequestId) {
+      return;
+    }
+    renderMapError();
   }
 };
 
@@ -227,6 +274,7 @@ const resetFilters = () => {
   });
 
   fetchDishes();
+  fetchMapPoints();
 };
 
 const init = () => {
@@ -242,6 +290,7 @@ const init = () => {
   districtSelect.addEventListener("change", (event) => {
     filters.district = event.target.value;
     fetchDishes();
+    fetchMapPoints();
   });
 
   sortSelect.addEventListener("change", (event) => {
@@ -266,6 +315,7 @@ const init = () => {
   });
 
   fetchDishes();
+  fetchMapPoints();
 };
 
 init();

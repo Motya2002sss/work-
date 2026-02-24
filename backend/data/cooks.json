@@ -5,8 +5,16 @@
     "district": "ЮЗАО",
     "rating": 4.9,
     "verified": true,
+    "subscription_tier": "studio",
     "specialties": ["Домашняя кухня", "Семейные обеды"],
-    "bio": "Готовлю из фермерских продуктов, порции как для семьи."
+    "delivery_modes": ["pickup", "cook"],
+    "bio": "Готовлю из фермерских продуктов, порции как для семьи.",
+    "location": {
+      "city": "Москва",
+      "label": "ЮЗАО, рядом с м. Академическая",
+      "lat": 55.6896,
+      "lng": 37.5739
+    }
   },
   {
     "id": 2,
@@ -14,8 +22,16 @@
     "district": "ЦАО",
     "rating": 4.8,
     "verified": true,
+    "subscription_tier": "pro",
     "specialties": ["Восточная кухня", "Мангал"],
-    "bio": "Шашлык, люля, свежая выпечка. Доставка поваром."
+    "delivery_modes": ["cook", "courier"],
+    "bio": "Шашлык, люля, свежая выпечка. Доставка поваром.",
+    "location": {
+      "city": "Москва",
+      "label": "ЦАО, рядом с м. Таганская",
+      "lat": 55.7418,
+      "lng": 37.6526
+    }
   },
   {
     "id": 3,
@@ -23,7 +39,66 @@
     "district": "САО",
     "rating": 4.7,
     "verified": true,
+    "subscription_tier": "start",
     "specialties": ["ПП", "Детское меню"],
-    "bio": "Легкие блюда, кето и без сахара. Самовывоз."
+    "delivery_modes": ["pickup"],
+    "bio": "Легкие блюда, кето и без сахара. Самовывоз.",
+    "location": {
+      "city": "Москва",
+      "label": "САО, рядом с м. Аэропорт",
+      "lat": 55.8066,
+      "lng": 37.5298
+    }
+  },
+  {
+    "id": 4,
+    "name": "Татьяна М.",
+    "district": "ЦАО",
+    "rating": 4.8,
+    "verified": true,
+    "subscription_tier": "pro",
+    "specialties": ["Завтраки", "Десерты"],
+    "delivery_modes": ["pickup", "courier"],
+    "bio": "Сырники, запеканки и домашние десерты на каждый день.",
+    "location": {
+      "city": "Москва",
+      "label": "ЦАО, рядом с м. Павелецкая",
+      "lat": 55.7299,
+      "lng": 37.6363
+    }
+  },
+  {
+    "id": 5,
+    "name": "Алина Р.",
+    "district": "ЮЗАО",
+    "rating": 4.6,
+    "verified": true,
+    "subscription_tier": "start",
+    "specialties": ["Итальянская кухня", "Паста"],
+    "delivery_modes": ["pickup", "cook"],
+    "bio": "Домашняя лазанья, паста и соусы без полуфабрикатов.",
+    "location": {
+      "city": "Москва",
+      "label": "ЮЗАО, рядом с м. Университет",
+      "lat": 55.6924,
+      "lng": 37.5349
+    }
+  },
+  {
+    "id": 6,
+    "name": "Мария С.",
+    "district": "СВАО",
+    "rating": 4.5,
+    "verified": true,
+    "subscription_tier": "start",
+    "specialties": ["Супы", "ПП"],
+    "delivery_modes": ["pickup", "courier"],
+    "bio": "Супы и легкие блюда для ежедневного рациона.",
+    "location": {
+      "city": "Москва",
+      "label": "СВАО, рядом с м. Бабушкинская",
+      "lat": 55.8702,
+      "lng": 37.6631
+    }
   }
 ]

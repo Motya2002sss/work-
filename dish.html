@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ДомЕда — блюдо</title>
+    <meta name="description" content="Карточка блюда и оформление заказа в ДомЕда." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&family=Unbounded:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">ДомЕда</span>
+          <span class="brand-sub">Карточка блюда</span>
+        </div>
+        <nav class="nav">
+          <a href="/index.html#market">Назад в витрину</a>
+          <a href="/index.html#cook-map">Где повара</a>
+        </nav>
+        <div class="topbar-actions">
+          <a class="btn ghost" href="/index.html#market">К блюдам</a>
+        </div>
+      </header>
+
+      <main>
+        <section class="section detail-page">
+          <div class="section-head">
+            <div>
+              <h2>Оформление заказа</h2>
+              <p>Проверьте блюдо, выберите доставку и подтвердите заказ.</p>
+            </div>
+          </div>
+
+          <div class="detail-layout" id="detailLayout">
+            <div class="detail-state" id="detailState">Загрузка карточки блюда...</div>
+          </div>
+        </section>
+
+        <section class="section detail-recommended" id="recommendedSection" hidden>
+          <div class="section-head">
+            <div>
+              <h2>Еще в этом районе</h2>
+              <p>Похожие предложения рядом с вами.</p>
+            </div>
+          </div>
+          <div class="grid" id="recommendedGrid"></div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <div>
+          <div class="brand-mark">ДомЕда</div>
+          <div class="footer-meta">Домашняя еда рядом · Москва</div>
+        </div>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast">Заказ отправлен.</div>
+    <script src="dish.js"></script>
+  </body>
+</html>

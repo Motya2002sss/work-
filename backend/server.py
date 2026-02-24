@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -18,8 +18,10 @@ RUNTIME_DIR = DATA_DIR / "runtime"
 STATIC_FILES = {
     "/": "index.html",
     "/index.html": "index.html",
+    "/dish.html": "dish.html",
     "/styles.css": "styles.css",
     "/app.js": "app.js",
+    "/dish.js": "dish.js",
 }
 
 
@@ -77,6 +79,36 @@ def next_order_id(orders: List[Dict[str, Any]]) -> str:
     return f"ORD-{datetime.now().strftime('%Y%m%d')}-{len(orders) + 1:04d}"
 
 
+def safe_int(value: str, fallback: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def map_cook_points(cooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    points: List[Dict[str, Any]] = []
+    for cook in cooks:
+        location = cook.get("location", {})
+        if "lat" not in location or "lng" not in location:
+            continue
+
+        points.append(
+            {
+                "id": cook.get("id"),
+                "name": cook.get("name"),
+                "district": cook.get("district"),
+                "rating": cook.get("rating"),
+                "verified": cook.get("verified", False),
+                "lat": location.get("lat"),
+                "lng": location.get("lng"),
+                "label": location.get("label", ""),
+            }
+        )
+
+    return points
+
+
 class AppHandler(BaseHTTPRequestHandler):
     server_version = "DomEdaMVP/1.0"
 
@@ -131,9 +163,52 @@ class AppHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, {"items": items, "total": len(items)})
             return
 
+        if path.startswith("/api/dishes/"):
+            dish_id = safe_int(path.rsplit("/", 1)[-1], -1)
+            if dish_id <= 0:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "dish_id_invalid"})
+                return
+
+            dishes = read_json("dishes.json", [])
+            cooks = read_json("cooks.json", [])
+            dish = next((item for item in dishes if item.get("id") == dish_id), None)
+            if not dish:
+                self.send_json(HTTPStatus.NOT_FOUND, {"error": "dish_not_found"})
+                return
+
+            cook = self.find_dish_cook(dish, cooks)
+            recommended = [
+                item
+                for item in dishes
+                if item.get("id") != dish_id and item.get("district") == dish.get("district")
+            ][:3]
+
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "dish": dish,
+                    "cook": cook,
+                    "recommended": recommended,
+                },
+            )
+            return
+
         if path == "/api/cooks":
             cooks = read_json("cooks.json", [])
+            district = self.query_value(query, "district", "all")
+            if district and district != "all":
+                cooks = [item for item in cooks if item.get("district") == district]
             self.send_json(HTTPStatus.OK, {"items": cooks, "total": len(cooks)})
+            return
+
+        if path == "/api/cooks/map":
+            cooks = read_json("cooks.json", [])
+            district = self.query_value(query, "district", "all")
+            if district and district != "all":
+                cooks = [item for item in cooks if item.get("district") == district]
+
+            points = map_cook_points(cooks)
+            self.send_json(HTTPStatus.OK, {"items": points, "total": len(points)})
             return
 
         if path == "/api/subscriptions":
@@ -147,6 +222,16 @@ class AppHandler(BaseHTTPRequestHandler):
             return
 
         self.send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+
+    def find_dish_cook(self, dish: Dict[str, Any], cooks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        cook_id = dish.get("cook_id")
+        if cook_id is not None:
+            cook = next((item for item in cooks if item.get("id") == cook_id), None)
+            if cook:
+                return cook
+
+        cook_name = dish.get("cook")
+        return next((item for item in cooks if item.get("name") == cook_name), None)
 
     def filtered_dishes(self, query: Dict[str, List[str]]) -> List[Dict[str, Any]]:
         dishes = read_json("dishes.json", [])
@@ -227,11 +312,15 @@ class AppHandler(BaseHTTPRequestHandler):
             "id": next_order_id(orders),
             "dish_id": dish.get("id"),
             "dish_title": dish.get("title"),
+            "cook_id": dish.get("cook_id"),
             "cook": dish.get("cook"),
             "price": dish.get("price"),
             "district": dish.get("district"),
             "city": payload.get("city", "Москва"),
             "customer_name": payload.get("customer_name", "Гость"),
+            "customer_phone": payload.get("customer_phone", ""),
+            "address": payload.get("address", ""),
+            "comment": payload.get("comment", ""),
             "delivery_mode": delivery_mode,
             "status": "new",
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -340,7 +429,10 @@ def run() -> None:
 
     server = ThreadingHTTPServer((host, port), AppHandler)
     print(f"DomEda MVP server running on http://{host}:{port}")
-    print("Endpoints: /api/health, /api/dishes, /api/cooks, /api/subscriptions, /api/orders")
+    print(
+        "Endpoints: /api/health, /api/dishes, /api/dishes/<id>, /api/cooks, "
+        "/api/cooks/map, /api/subscriptions, /api/orders"
+    )
 
     try:
         server.serve_forever()

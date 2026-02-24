@@ -1,6 +1,7 @@
 [
   {
     "id": 1,
+    "cook_id": 1,
     "title": "Курица с пюре",
     "cook": "Светлана К.",
     "district": "ЮЗАО",
@@ -8,10 +9,13 @@
     "price": 450,
     "tags": ["hot", "comfort"],
     "delivery": ["pickup", "cook"],
-    "wait": "45 мин"
+    "wait": "45 мин",
+    "description": "Сочная курица с домашним картофельным пюре и сливочным соусом.",
+    "portion": "420 г"
   },
   {
     "id": 2,
+    "cook_id": 3,
     "title": "Борщ с пампушками",
     "cook": "Ирина П.",
     "district": "САО",
@@ -19,10 +23,13 @@
     "price": 380,
     "tags": ["soup"],
     "delivery": ["pickup"],
-    "wait": "35 мин"
+    "wait": "35 мин",
+    "description": "Классический борщ на говяжьем бульоне с чесночными пампушками.",
+    "portion": "500 г"
   },
   {
     "id": 3,
+    "cook_id": 4,
     "title": "Сырники с ягодами",
     "cook": "Татьяна М.",
     "district": "ЦАО",
@@ -30,10 +37,13 @@
     "price": 320,
     "tags": ["dessert"],
     "delivery": ["pickup", "courier"],
-    "wait": "25 мин"
+    "wait": "25 мин",
+    "description": "Нежные творожные сырники с сезонными ягодами и сметаной.",
+    "portion": "300 г"
   },
   {
     "id": 4,
+    "cook_id": 2,
     "title": "Поке с лососем",
     "cook": "Арман М.",
     "district": "ЦАО",
@@ -41,10 +51,13 @@
     "price": 690,
     "tags": ["healthy"],
     "delivery": ["cook", "courier"],
-    "wait": "40 мин"
+    "wait": "40 мин",
+    "description": "Поке с лососем, авокадо, рисом и свежими овощами.",
+    "portion": "430 г"
   },
   {
     "id": 5,
+    "cook_id": 5,
     "title": "Лазанья домашняя",
     "cook": "Алина Р.",
     "district": "ЮЗАО",
@@ -52,10 +65,13 @@
     "price": 520,
     "tags": ["hot"],
     "delivery": ["pickup", "cook"],
-    "wait": "50 мин"
+    "wait": "50 мин",
+    "description": "Лазанья с мясным рагу, томатным соусом и сырной корочкой.",
+    "portion": "460 г"
   },
   {
     "id": 6,
+    "cook_id": 6,
     "title": "Суп-пюре тыквенный",
     "cook": "Мария С.",
     "district": "СВАО",
@@ -63,10 +79,13 @@
     "price": 310,
     "tags": ["soup", "healthy"],
     "delivery": ["pickup", "courier"],
-    "wait": "30 мин"
+    "wait": "30 мин",
+    "description": "Нежный тыквенный суп-пюре с травами и домашними сухариками.",
+    "portion": "450 г"
   },
   {
     "id": 7,
+    "cook_id": 2,
     "title": "Плов узбекский",
     "cook": "Арман М.",
     "district": "ЦАО",
@@ -74,10 +93,13 @@
     "price": 560,
     "tags": ["hot"],
     "delivery": ["cook", "courier"],
-    "wait": "45 мин"
+    "wait": "45 мин",
+    "description": "Плов с говядиной, морковью и специями по семейному рецепту.",
+    "portion": "500 г"
   },
   {
     "id": 8,
+    "cook_id": 1,
     "title": "Гречка с котлетами",
     "cook": "Светлана К.",
     "district": "ЮЗАО",
@@ -85,6 +107,8 @@
     "price": 390,
     "tags": ["hot"],
     "delivery": ["pickup"],
-    "wait": "35 мин"
+    "wait": "35 мин",
+    "description": "Домашние котлеты из индейки с гречкой и овощным гарниром.",
+    "portion": "430 г"
   }
 ]
