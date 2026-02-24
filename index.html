@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ДомЕда — локальный маркетплейс домашней еды</title>
+    <meta
+      name="description"
+      content="ДомЕда — локальный маркетплейс домашней еды в Москве. Любой повар с подпиской может продавать блюда, а покупатель — заказывать или забирать самовывозом."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&family=Unbounded:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">ДомЕда</span>
+          <span class="brand-sub">Москва · тестовый район</span>
+        </div>
+        <nav class="nav">
+          <a href="#market">Витрина</a>
+          <a href="#cooks">Повара</a>
+          <a href="#subscription">Подписка</a>
+          <a href="#safety">Безопасность</a>
+        </nav>
+        <div class="topbar-actions">
+          <button class="btn ghost">Стать поваром</button>
+          <button class="btn">Заказать</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-content">
+            <div class="eyebrow">Маркетплейс домашней еды</div>
+            <h1>Как Wildberries, только для еды из домашней кухни</h1>
+            <p class="lead">
+              Любой повар с подпиской может продавать свои блюда. Покупатель заказывает, а
+              доставку выбирает сам: самовывоз, доставка поваром или курьер на один день.
+            </p>
+            <div class="hero-actions">
+              <div class="search">
+                <input id="searchInput" type="text" placeholder="Найти: курица с пюре, борщ, сырники" />
+                <select>
+                  <option>Москва</option>
+                  <option>Москва, ЮЗАО</option>
+                  <option>Москва, ЦАО</option>
+                </select>
+                <button class="btn">Искать</button>
+              </div>
+              <div class="stats">
+                <div>
+                  <div class="stat-value">120+</div>
+                  <div class="stat-label">поваров рядом</div>
+                </div>
+                <div>
+                  <div class="stat-value">4.8</div>
+                  <div class="stat-label">средний рейтинг</div>
+                </div>
+                <div>
+                  <div class="stat-value">30 мин</div>
+                  <div class="stat-label">до самовывоза</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hero-visual">
+            <div class="plate">
+              <div class="plate-header">
+                <div>
+                  <div class="plate-title">Заказ №2481</div>
+                  <div class="plate-meta">Курица с пюре · сегодня</div>
+                </div>
+                <span class="badge hot">Горячее</span>
+              </div>
+              <div class="plate-items">
+                <div class="plate-item">
+                  <span>Курица с пюре</span>
+                  <span>450 ₽</span>
+                </div>
+                <div class="plate-item">
+                  <span>Салат сезонный</span>
+                  <span>220 ₽</span>
+                </div>
+                <div class="plate-item">
+                  <span>Компот</span>
+                  <span>120 ₽</span>
+                </div>
+              </div>
+              <div class="plate-footer">
+                <div>
+                  <div class="plate-title">Повар: Светлана К.</div>
+                  <div class="plate-meta">Рейтинг 4.9 · Верифицирована</div>
+                </div>
+                <button class="btn small">Подтвердить</button>
+              </div>
+            </div>
+            <div class="chips">
+              <span>Самовывоз</span>
+              <span>Курьер на день</span>
+              <span>Доставка поваром</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="market" class="section market">
+          <div class="section-head">
+            <div>
+              <h2>Витрина блюд</h2>
+              <p>Выбор по району Москвы, типу кухни и рейтингу повара.</p>
+            </div>
+            <div class="sort">
+              <label for="sort">Сортировка</label>
+              <select id="sort">
+                <option value="rating">По рейтингу</option>
+                <option value="price-asc">Цена: по возрастанию</option>
+                <option value="price-desc">Цена: по убыванию</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="market-body">
+            <aside class="filters">
+              <div class="filter-block">
+                <div class="filter-title">Локация</div>
+                <label>Город</label>
+                <select id="city">
+                  <option>Москва</option>
+                </select>
+                <label>Район</label>
+                <select id="district">
+                  <option value="all">Любой</option>
+                  <option value="ЦАО">ЦАО</option>
+                  <option value="ЮЗАО">ЮЗАО</option>
+                  <option value="СВАО">СВАО</option>
+                  <option value="САО">САО</option>
+                </select>
+              </div>
+
+              <div class="filter-block">
+                <div class="filter-title">Категория</div>
+                <label class="check">
+                  <input type="checkbox" value="hot" data-group="categories" />
+                  Горячее
+                </label>
+                <label class="check">
+                  <input type="checkbox" value="soup" data-group="categories" />
+                  Супы
+                </label>
+                <label class="check">
+                  <input type="checkbox" value="dessert" data-group="categories" />
+                  Десерты
+                </label>
+                <label class="check">
+                  <input type="checkbox" value="healthy" data-group="categories" />
+                  ПП
+                </label>
+              </div>
+
+              <div class="filter-block">
+                <div class="filter-title">Цена</div>
+                <input id="price" type="range" min="150" max="900" value="650" />
+                <div class="range-value">До <span id="priceValue">650</span> ₽</div>
+              </div>
+
+              <div class="filter-block">
+                <div class="filter-title">Рейтинг повара</div>
+                <label class="check">
+                  <input type="checkbox" value="4.6" data-group="ratings" />
+                  4.6 и выше
+                </label>
+                <label class="check">
+                  <input type="checkbox" value="4.8" data-group="ratings" />
+                  4.8 и выше
+                </label>
+              </div>
+
+              <div class="filter-block">
+                <div class="filter-title">Доставка</div>
+                <label class="check">
+                  <input type="checkbox" value="pickup" data-group="delivery" />
+                  Самовывоз
+                </label>
+                <label class="check">
+                  <input type="checkbox" value="cook" data-group="delivery" />
+                  Доставка поваром
+                </label>
+                <label class="check">
+                  <input type="checkbox" value="courier" data-group="delivery" />
+                  Курьер на день
+                </label>
+              </div>
+
+              <button class="btn ghost full" id="resetFilters">Сбросить фильтры</button>
+            </aside>
+
+            <div class="grid" id="dishGrid"></div>
+          </div>
+        </section>
+
+        <section id="cooks" class="section cooks">
+          <div class="section-head">
+            <div>
+              <h2>Повара рядом</h2>
+              <p>Верификация обязательна, рейтинг влияет на позицию в выдаче.</p>
+            </div>
+            <button class="btn ghost">Посмотреть всех</button>
+          </div>
+          <div class="cook-grid">
+            <article class="cook-card">
+              <div class="cook-header">
+                <div>
+                  <div class="cook-name">Светлана К.</div>
+                  <div class="cook-meta">ЮЗАО · 4.9</div>
+                </div>
+                <span class="badge verified">Верифицирована</span>
+              </div>
+              <div class="cook-tags">
+                <span>Домашняя кухня</span>
+                <span>Семейные обеды</span>
+              </div>
+              <p>Готовлю из фермерских продуктов, порции как для семьи.</p>
+              <button class="btn small">Открыть меню</button>
+            </article>
+            <article class="cook-card">
+              <div class="cook-header">
+                <div>
+                  <div class="cook-name">Арман М.</div>
+                  <div class="cook-meta">ЦАО · 4.8</div>
+                </div>
+                <span class="badge verified">Верифицирован</span>
+              </div>
+              <div class="cook-tags">
+                <span>Восточная кухня</span>
+                <span>Мангал</span>
+              </div>
+              <p>Шашлык, люля, свежая выпечка. Доставка поваром.</p>
+              <button class="btn small">Открыть меню</button>
+            </article>
+            <article class="cook-card">
+              <div class="cook-header">
+                <div>
+                  <div class="cook-name">Ирина П.</div>
+                  <div class="cook-meta">САО · 4.7</div>
+                </div>
+                <span class="badge verified">Верифицирована</span>
+              </div>
+              <div class="cook-tags">
+                <span>ПП</span>
+                <span>Детское меню</span>
+              </div>
+              <p>Легкие блюда, кето и без сахара. Самовывоз.</p>
+              <button class="btn small">Открыть меню</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="section how">
+          <div class="section-head">
+            <div>
+              <h2>Как это работает</h2>
+              <p>Две роли — повар и покупатель. Все просто.</p>
+            </div>
+          </div>
+          <div class="how-grid">
+            <div class="how-card">
+              <div class="how-title">Для повара</div>
+              <ol>
+                <li>Проходите верификацию и оформляете подписку.</li>
+                <li>Добавляете блюда, фото, цены и время готовности.</li>
+                <li>Получаете заказы и выбираете способ доставки.</li>
+                <li>Поднимаетесь в выдаче по рейтингу и скорости.</li>
+              </ol>
+              <button class="btn small">Стать поваром</button>
+            </div>
+            <div class="how-card">
+              <div class="how-title">Для покупателя</div>
+              <ol>
+                <li>Выбираете блюдо и район в Москве.</li>
+                <li>Смотрите рейтинг и отзывы повара.</li>
+                <li>Оплачиваете и выбираете доставку.</li>
+                <li>Получаете горячую еду без ресторанных наценок.</li>
+              </ol>
+              <button class="btn small ghost">Скачать приложение</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="subscription" class="section subscription">
+          <div class="section-head">
+            <div>
+              <h2>Подписка повара</h2>
+              <p>Подписка влияет на позицию в топе, скорость модерации и охват.</p>
+            </div>
+          </div>
+          <div class="sub-grid">
+            <article class="sub-card">
+              <div class="sub-name">Старт</div>
+              <div class="sub-price">990 ₽/мес</div>
+              <ul>
+                <li>Базовая витрина</li>
+                <li>До 10 блюд</li>
+                <li>Самовывоз</li>
+              </ul>
+              <button class="btn ghost full">Выбрать</button>
+            </article>
+            <article class="sub-card featured">
+              <div class="sub-tag">Топ размещение</div>
+              <div class="sub-name">Про</div>
+              <div class="sub-price">1 990 ₽/мес</div>
+              <ul>
+                <li>Выше в выдаче</li>
+                <li>До 30 блюд</li>
+                <li>Приоритетная модерация</li>
+                <li>Скидка 10% на курьера</li>
+              </ul>
+              <button class="btn full">Выбрать</button>
+            </article>
+            <article class="sub-card">
+              <div class="sub-name">Студия</div>
+              <div class="sub-price">3 490 ₽/мес</div>
+              <ul>
+                <li>Топ 5 района</li>
+                <li>Безлимит блюд</li>
+                <li>Выделенный менеджер</li>
+                <li>Скидка 20% на курьера</li>
+              </ul>
+              <button class="btn ghost full">Выбрать</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="section courier">
+          <div class="section-head">
+            <div>
+              <h2>Курьер на один день</h2>
+              <p>Повар может арендовать курьера на день прямо внутри приложения.</p>
+            </div>
+          </div>
+          <div class="courier-card">
+            <div>
+              <div class="courier-title">Гибкий формат доставки</div>
+              <p>
+                Вы выбираете: доставить лично, отдать курьеру или предложить самовывоз. Все
+                настройки хранятся в карточке блюда.
+              </p>
+              <div class="courier-tags">
+                <span>Быстрое назначение</span>
+                <span>Трек заказа</span>
+                <span>Скидки по подписке</span>
+              </div>
+            </div>
+            <button class="btn">Арендовать курьера</button>
+          </div>
+        </section>
+
+        <section id="safety" class="section safety">
+          <div class="section-head">
+            <div>
+              <h2>Верификация и рейтинг</h2>
+              <p>Доверие — основа. Верификация обязательна, рейтинг влияет на выдачу.</p>
+            </div>
+          </div>
+          <div class="safety-grid">
+            <div class="safety-card">
+              <div class="safety-title">Документы</div>
+              <p>Проверка личности и подтверждение адреса кухни.</p>
+            </div>
+            <div class="safety-card">
+              <div class="safety-title">Качество</div>
+              <p>Оценки за вкус, упаковку и соблюдение сроков.</p>
+            </div>
+            <div class="safety-card">
+              <div class="safety-title">Поддержка</div>
+              <p>Споры решаются внутри платформы, возвраты контролируются.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section faq">
+          <div class="section-head">
+            <div>
+              <h2>FAQ</h2>
+              <p>Ключевые вопросы перед запуском MVP.</p>
+            </div>
+          </div>
+          <div class="faq-grid">
+            <div class="faq-item">
+              <div class="faq-question">Можно ли продавать без подписки?</div>
+              <div class="faq-answer">Нет, подписка обязательна для всех поваров.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-question">Кто назначает цену?</div>
+              <div class="faq-answer">Цену выставляет сам повар, платформа берет комиссию.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-question">Как работает курьер на день?</div>
+              <div class="faq-answer">Повар бронирует курьера, стоимость списывается с баланса.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section cta">
+          <div class="cta-card">
+            <div>
+              <h2>Запуск в Москве</h2>
+              <p>Откройте кухню дома или закажите еду от соседей уже сегодня.</p>
+            </div>
+            <div class="cta-actions">
+              <button class="btn">Стать поваром</button>
+              <button class="btn ghost">Оставить заявку</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <div>
+          <div class="brand-mark">ДомЕда</div>
+          <div class="footer-meta">Локальный маркетплейс домашней еды · Москва</div>
+        </div>
+        <div class="footer-links">
+          <a href="#">Публичная оферта</a>
+          <a href="#">Политика конфиденциальности</a>
+          <a href="#">Поддержка</a>
+        </div>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast">Заказ добавлен. Ожидайте подтверждения.</div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
