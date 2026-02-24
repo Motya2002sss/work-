@@ -32,7 +32,7 @@
         </nav>
         <div class="topbar-actions">
           <a class="btn ghost" href="/cook.html">Кабинет повара</a>
-          <button class="btn">Заказать</button>
+          <a class="btn" id="goCartBtn" href="#cart-checkout">Корзина (0)</a>
         </div>
       </header>
 
@@ -198,10 +198,73 @@
                 </label>
               </div>
 
+              <div class="filter-block">
+                <label class="check">
+                  <input id="availableOnly" type="checkbox" />
+                  Только в наличии
+                </label>
+              </div>
+
               <button class="btn ghost full" id="resetFilters">Сбросить фильтры</button>
             </aside>
 
             <div class="grid" id="dishGrid"></div>
+          </div>
+        </section>
+
+        <section id="cart-checkout" class="section checkout">
+          <div class="section-head">
+            <div>
+              <h2>Корзина и оформление</h2>
+              <p>Выберите несколько блюд и оформите один заказ.</p>
+            </div>
+          </div>
+          <div class="checkout-layout">
+            <article class="checkout-cart">
+              <div class="checkout-head">
+                <h3>Корзина</h3>
+                <button id="clearCartBtn" class="btn ghost small" type="button">Очистить</button>
+              </div>
+              <div id="cartItems" class="cart-items"></div>
+              <div id="cartSummary" class="cart-summary">Итого: 0 ₽</div>
+            </article>
+            <article class="checkout-form-card">
+              <h3>Данные заказа</h3>
+              <form id="checkoutForm" class="order-form">
+                <label>
+                  Имя
+                  <input name="customer_name" type="text" required placeholder="Как к вам обращаться" />
+                </label>
+                <label>
+                  Телефон
+                  <input name="customer_phone" type="tel" placeholder="+7 (999) 000-00-00" />
+                </label>
+                <fieldset>
+                  <legend>Способ получения</legend>
+                  <label class="radio-row">
+                    <input type="radio" name="delivery_mode" value="pickup" checked />
+                    Самовывоз
+                  </label>
+                  <label class="radio-row">
+                    <input type="radio" name="delivery_mode" value="cook" />
+                    Доставка поваром
+                  </label>
+                  <label class="radio-row">
+                    <input type="radio" name="delivery_mode" value="courier" />
+                    Курьер на день
+                  </label>
+                </fieldset>
+                <label>
+                  Адрес
+                  <textarea name="address" rows="2" placeholder="Укажите адрес доставки"></textarea>
+                </label>
+                <label>
+                  Комментарий
+                  <textarea name="comment" rows="3" placeholder="Пожелания к заказу"></textarea>
+                </label>
+                <button class="btn full" type="submit">Оформить заказ</button>
+              </form>
+            </article>
           </div>
         </section>
 
@@ -449,6 +512,7 @@
 
     <div class="toast" id="toast">Заказ добавлен. Ожидайте подтверждения.</div>
 
+    <script src="cart.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

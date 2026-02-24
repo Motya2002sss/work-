@@ -26,6 +26,7 @@
         </nav>
         <div class="topbar-actions">
           <a class="btn ghost" href="/index.html#market">К блюдам</a>
+          <a class="btn" id="dishGoCartBtn" href="/index.html#cart-checkout">Корзина (0)</a>
         </div>
       </header>
 
@@ -52,6 +53,49 @@
           </div>
           <div class="grid" id="recommendedGrid"></div>
         </section>
+
+        <section class="section reviews-section">
+          <div class="section-head">
+            <div>
+              <h2>Отзывы</h2>
+              <p>Оценки клиентов влияют на рейтинг и позицию в выдаче.</p>
+            </div>
+          </div>
+          <div class="reviews-layout">
+            <article class="reviews-list-card">
+              <div id="reviewsSummary" class="reviews-summary">Загрузка отзывов...</div>
+              <div id="reviewsList" class="reviews-list"></div>
+            </article>
+            <article class="reviews-form-card">
+              <h3>Оставить отзыв</h3>
+              <form id="reviewForm" class="order-form">
+                <label>
+                  Имя
+                  <input name="customer_name" type="text" required placeholder="Ваше имя" />
+                </label>
+                <label>
+                  Оценка
+                  <select name="rating" required>
+                    <option value="5">5 - отлично</option>
+                    <option value="4">4 - хорошо</option>
+                    <option value="3">3 - нормально</option>
+                    <option value="2">2 - слабо</option>
+                    <option value="1">1 - плохо</option>
+                  </select>
+                </label>
+                <label>
+                  ID заказа (опционально)
+                  <input name="order_id" type="text" placeholder="ORD-20260224-0001" />
+                </label>
+                <label>
+                  Отзыв
+                  <textarea name="text" rows="4" required placeholder="Что понравилось, что улучшить"></textarea>
+                </label>
+                <button class="btn full" type="submit">Отправить отзыв</button>
+              </form>
+            </article>
+          </div>
+        </section>
       </main>
 
       <footer class="footer">
@@ -63,6 +107,7 @@
     </div>
 
     <div class="toast" id="toast">Заказ отправлен.</div>
+    <script src="cart.js"></script>
     <script src="dish.js"></script>
   </body>
 </html>

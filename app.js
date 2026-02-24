@@ -6,6 +6,7 @@ const filters = {
   maxPrice: 650,
   search: "",
   sort: "rating",
+  availableOnly: false,
 };
 
 const dishGrid = document.getElementById("dishGrid");
@@ -15,11 +16,29 @@ const resetButton = document.getElementById("resetFilters");
 const districtSelect = document.getElementById("district");
 const sortSelect = document.getElementById("sort");
 const searchInput = document.getElementById("searchInput");
+const availableOnlyInput = document.getElementById("availableOnly");
 const mapPoints = document.getElementById("mapPoints");
 const mapStatus = document.getElementById("mapStatus");
+const goCartBtn = document.getElementById("goCartBtn");
+
+const cartItemsNode = document.getElementById("cartItems");
+const cartSummaryNode = document.getElementById("cartSummary");
+const checkoutForm = document.getElementById("checkoutForm");
+const clearCartBtn = document.getElementById("clearCartBtn");
+const toast = document.getElementById("toast");
 
 let dishesRequestId = 0;
 let mapRequestId = 0;
+
+const cartApi = window.DomEdaCart || {
+  read: () => [],
+  add: () => {},
+  remove: () => {},
+  setQty: () => {},
+  clear: () => {},
+  count: () => 0,
+  total: () => 0,
+};
 
 const labelTag = (tag) => {
   const map = {
@@ -39,6 +58,21 @@ const labelDelivery = (mode) => {
     courier: "Курьер",
   };
   return map[mode] || mode;
+};
+
+const showToast = (text) => {
+  toast.textContent = text;
+  toast.classList.add("show");
+  window.clearTimeout(window.__toastTimer);
+  window.__toastTimer = window.setTimeout(() => {
+    toast.classList.remove("show");
+  }, 3200);
+};
+
+const escapeHtml = (value) => {
+  const div = document.createElement("div");
+  div.textContent = String(value || "");
+  return div.innerHTML;
 };
 
 const buildDishesQuery = () => {
@@ -66,13 +100,25 @@ const buildDishesQuery = () => {
     params.set("min_rating", String(minRating));
   }
 
+  if (filters.availableOnly) {
+    params.set("available_only", "1");
+  }
+
   params.set("sort", filters.sort);
   return params.toString();
+};
+
+const updateCartButton = () => {
+  if (!goCartBtn) {
+    return;
+  }
+  goCartBtn.textContent = `Корзина (${cartApi.count()})`;
 };
 
 const renderDish = (dish) => {
   const card = document.createElement("article");
   card.className = "dish-card";
+
   const imageBlock = dish.image_url
     ? `
       <img
@@ -87,6 +133,9 @@ const renderDish = (dish) => {
       <div class="dish-image-empty">Фото скоро загрузят</div>
     `;
 
+  const availabilityClass = dish.is_available ? "availability-ok" : "availability-off";
+  const addDisabled = dish.is_available ? "" : "disabled";
+
   card.innerHTML = `
     <div class="dish-image-wrap">
       ${imageBlock}
@@ -100,17 +149,29 @@ const renderDish = (dish) => {
       ${(dish.tags || []).map((tag) => `<span>${labelTag(tag)}</span>`).join("")}
     </div>
     <div class="dish-meta">
-      <span>Рейтинг ${Number(dish.rating).toFixed(1)}</span>
+      <span>Рейтинг ${Number(dish.rating).toFixed(1)} (${dish.reviews_count || 0})</span>
       <span>${dish.wait || "40 мин"}</span>
     </div>
     <div class="dish-meta">
       <span>Доставка: ${(dish.delivery || []).map(labelDelivery).join(", ")}</span>
     </div>
+    <div class="dish-availability ${availabilityClass}">${dish.availability_label || "Проверка наличия"}</div>
     <div class="dish-actions">
       <strong>${dish.price} ₽</strong>
-      <a class="btn small" href="/dish.html?id=${dish.id}">Открыть</a>
+      <div class="dish-buttons">
+        <button class="btn small ghost" type="button" data-add-cart ${addDisabled}>В корзину</button>
+        <a class="btn small" href="/dish.html?id=${dish.id}">Открыть</a>
+      </div>
     </div>
   `;
+
+  const addButton = card.querySelector("[data-add-cart]");
+  if (addButton) {
+    addButton.addEventListener("click", () => {
+      cartApi.add(dish, 1);
+      showToast(`Добавлено в корзину: ${dish.title}`);
+    });
+  }
 
   return card;
 };
@@ -257,6 +318,171 @@ const fetchMapPoints = async () => {
   }
 };
 
+const syncCheckoutAddressControl = () => {
+  if (!checkoutForm) {
+    return;
+  }
+
+  const selected = checkoutForm.querySelector("input[name=delivery_mode]:checked");
+  const addressField = checkoutForm.querySelector("textarea[name=address]");
+  if (!selected || !addressField) {
+    return;
+  }
+
+  if (selected.value === "pickup") {
+    addressField.required = false;
+    addressField.disabled = true;
+    addressField.placeholder = "Для самовывоза адрес не нужен";
+    return;
+  }
+
+  addressField.disabled = false;
+  addressField.required = true;
+  addressField.placeholder = "Укажите адрес доставки";
+};
+
+const cartErrorMessage = (code) => {
+  const map = {
+    items_required: "Корзина пуста.",
+    dish_unavailable: "Одно из блюд уже недоступно.",
+    dish_stock_not_enough: "Недостаточно порций по одному из блюд.",
+    delivery_mode_not_available: "Для одного из блюд выбранный тип доставки недоступен.",
+    delivery_mode_invalid: "Проверьте способ доставки.",
+  };
+  return map[code] || "Не удалось оформить заказ. Повторите попытку.";
+};
+
+const renderCart = async () => {
+  if (!cartItemsNode || !cartSummaryNode) {
+    return;
+  }
+
+  updateCartButton();
+
+  const items = cartApi.read();
+  if (!items.length) {
+    cartItemsNode.innerHTML = "<div class='cart-empty'>Корзина пуста. Добавьте блюда из витрины.</div>";
+    cartSummaryNode.textContent = "Итого: 0 ₽";
+    return;
+  }
+
+  const ids = items.map((item) => item.id).join(",");
+  const response = await fetch(`/api/cart/preview?ids=${encodeURIComponent(ids)}`);
+  if (!response.ok) {
+    cartItemsNode.innerHTML = "<div class='cart-empty'>Не удалось загрузить корзину.</div>";
+    return;
+  }
+
+  const payload = await response.json();
+  const liveMap = new Map((payload.items || []).map((dish) => [dish.id, dish]));
+
+  let total = 0;
+  cartItemsNode.innerHTML = "";
+
+  items.forEach((item) => {
+    const live = liveMap.get(item.id);
+    const price = live ? Number(live.price) : Number(item.price);
+    const title = live ? live.title : item.title;
+    const availability = live ? live.availability_label : "Проверьте наличие";
+    const isAvailable = live ? !!live.is_available : false;
+    const portionsAvailable = live ? Number(live.portions_available || 0) : 0;
+    const safeQty = isAvailable ? Math.min(item.qty, Math.max(1, portionsAvailable || item.qty)) : item.qty;
+
+    const subtotal = price * safeQty;
+    total += subtotal;
+
+    const row = document.createElement("article");
+    row.className = "cart-item";
+    row.innerHTML = `
+      <div class="cart-item-main">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${availability}</span>
+      </div>
+      <div class="cart-item-controls">
+        <button type="button" class="btn ghost small" data-dec>-</button>
+        <span>${safeQty}</span>
+        <button type="button" class="btn ghost small" data-inc ${isAvailable ? "" : "disabled"}>+</button>
+      </div>
+      <div class="cart-item-price">${subtotal} ₽</div>
+      <button type="button" class="btn ghost small" data-remove>Удалить</button>
+    `;
+
+    row.querySelector("[data-dec]").addEventListener("click", () => {
+      cartApi.setQty(item.id, safeQty - 1);
+    });
+
+    row.querySelector("[data-inc]").addEventListener("click", () => {
+      const nextQty = safeQty + 1;
+      if (portionsAvailable > 0 && nextQty > portionsAvailable) {
+        showToast("Превышено доступное количество порций");
+        return;
+      }
+      cartApi.setQty(item.id, nextQty);
+    });
+
+    row.querySelector("[data-remove]").addEventListener("click", () => {
+      cartApi.remove(item.id);
+    });
+
+    cartItemsNode.appendChild(row);
+  });
+
+  cartSummaryNode.textContent = `Итого: ${total} ₽ · Позиций: ${cartApi.count()}`;
+};
+
+const submitCheckout = async (event) => {
+  event.preventDefault();
+
+  const items = cartApi.read();
+  if (!items.length) {
+    showToast("Корзина пуста");
+    return;
+  }
+
+  const formData = new FormData(checkoutForm);
+  const deliveryMode = String(formData.get("delivery_mode") || "pickup");
+
+  const payload = {
+    items: items.map((item) => ({ dish_id: item.id, qty: item.qty })),
+    customer_name: String(formData.get("customer_name") || ""),
+    customer_phone: String(formData.get("customer_phone") || ""),
+    address: String(formData.get("address") || ""),
+    comment: String(formData.get("comment") || ""),
+    delivery_mode: deliveryMode,
+    city: "Москва",
+  };
+
+  const submitButton = checkoutForm.querySelector("button[type=submit]");
+  submitButton.disabled = true;
+  submitButton.textContent = "Оформляем...";
+
+  try {
+    const response = await fetch("/api/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || "checkout_failed");
+    }
+
+    cartApi.clear();
+    checkoutForm.reset();
+    syncCheckoutAddressControl();
+    showToast(`Заказ ${result.order.id} оформлен`);
+
+    fetchDishes();
+    fetchMapPoints();
+  } catch (error) {
+    showToast(cartErrorMessage(error.message));
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Оформить заказ";
+  }
+};
+
 const updateFilterSet = (group, value, checked) => {
   if (!filters[group]) {
     return;
@@ -279,14 +505,18 @@ const resetFilters = () => {
   filters.maxPrice = 650;
   filters.search = "";
   filters.sort = "rating";
+  filters.availableOnly = false;
 
   districtSelect.value = "all";
   priceInput.value = String(filters.maxPrice);
   priceValue.textContent = String(filters.maxPrice);
   sortSelect.value = "rating";
   searchInput.value = "";
+  if (availableOnlyInput) {
+    availableOnlyInput.checked = false;
+  }
 
-  document.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
+  document.querySelectorAll("input[type=checkbox][data-group]").forEach((checkbox) => {
     checkbox.checked = false;
   });
 
@@ -320,7 +550,14 @@ const init = () => {
     fetchDishes();
   });
 
-  document.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
+  if (availableOnlyInput) {
+    availableOnlyInput.addEventListener("change", (event) => {
+      filters.availableOnly = event.target.checked;
+      fetchDishes();
+    });
+  }
+
+  document.querySelectorAll("input[type=checkbox][data-group]").forEach((checkbox) => {
     checkbox.addEventListener("change", (event) => {
       const group = event.target.dataset.group;
       updateFilterSet(group, event.target.value, event.target.checked);
@@ -331,8 +568,28 @@ const init = () => {
     resetFilters();
   });
 
+  if (clearCartBtn) {
+    clearCartBtn.addEventListener("click", () => {
+      cartApi.clear();
+    });
+  }
+
+  if (checkoutForm) {
+    checkoutForm.addEventListener("submit", submitCheckout);
+    checkoutForm.querySelectorAll("input[name=delivery_mode]").forEach((radio) => {
+      radio.addEventListener("change", syncCheckoutAddressControl);
+    });
+    syncCheckoutAddressControl();
+  }
+
+  window.addEventListener("domeda-cart-updated", () => {
+    renderCart();
+  });
+
   fetchDishes();
   fetchMapPoints();
+  renderCart();
+  updateCartButton();
 };
 
 init();

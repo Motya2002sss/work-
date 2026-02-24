@@ -29,6 +29,7 @@ STATIC_FILES = {
     "/app.js": "app.js",
     "/dish.js": "dish.js",
     "/cook.js": "cook.js",
+    "/cart.js": "cart.js",
 }
 
 
@@ -88,6 +89,25 @@ def write_orders(orders: List[Dict[str, Any]]) -> None:
         json.dump(orders, handle, ensure_ascii=False, indent=2)
 
 
+def read_reviews() -> List[Dict[str, Any]]:
+    runtime_file = RUNTIME_DIR / "reviews.json"
+    if runtime_file.exists():
+        try:
+            with runtime_file.open("r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except (json.JSONDecodeError, OSError):
+            return []
+
+    return read_json("reviews.json", [])
+
+
+def write_reviews(reviews: List[Dict[str, Any]]) -> None:
+    runtime_file = RUNTIME_DIR / "reviews.json"
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    with runtime_file.open("w", encoding="utf-8") as handle:
+        json.dump(reviews, handle, ensure_ascii=False, indent=2)
+
+
 def csv_set(value: str) -> set[str]:
     if not value:
         return set()
@@ -110,6 +130,10 @@ def safe_int(value: str, fallback: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return fallback
+
+
+def round_rating(value: float) -> float:
+    return round(value + 1e-8, 2)
 
 
 def clean_str(value: Any) -> str:
@@ -146,6 +170,154 @@ def detect_image_extension(filename: str, content_type: str) -> str:
     return fallback_map.get(content_type, "")
 
 
+def valid_hhmm(value: str) -> bool:
+    if not value:
+        return True
+    parts = value.split(":")
+    if len(parts) != 2:
+        return False
+    hours = safe_int(parts[0], -1)
+    minutes = safe_int(parts[1], -1)
+    return 0 <= hours <= 23 and 0 <= minutes <= 59
+
+
+def hhmm_to_minutes(value: str) -> int:
+    if not valid_hhmm(value) or not value:
+        return -1
+    hours, minutes = value.split(":")
+    return safe_int(hours, 0) * 60 + safe_int(minutes, 0)
+
+
+def now_local_minutes() -> int:
+    current = datetime.now()
+    return current.hour * 60 + current.minute
+
+
+def dish_portions_available(dish: Dict[str, Any]) -> int:
+    portions = safe_int(str(dish.get("portions_available", 8)), 8)
+    return max(0, portions)
+
+
+def dish_is_time_available(dish: Dict[str, Any]) -> bool:
+    now_minutes = now_local_minutes()
+    available_from = clean_str(dish.get("available_from", ""))
+    available_until = clean_str(dish.get("available_until", ""))
+
+    from_minutes = hhmm_to_minutes(available_from)
+    until_minutes = hhmm_to_minutes(available_until)
+
+    if from_minutes >= 0 and now_minutes < from_minutes:
+        return False
+    if until_minutes >= 0 and now_minutes > until_minutes:
+        return False
+
+    return True
+
+
+def dish_availability(dish: Dict[str, Any]) -> Dict[str, Any]:
+    portions = dish_portions_available(dish)
+    in_time_window = dish_is_time_available(dish)
+    is_available = portions > 0 and in_time_window
+    available_until = clean_str(dish.get("available_until", ""))
+
+    if portions <= 0:
+        label = "Закончилось"
+    elif not in_time_window:
+        label = "Вне времени приема"
+    elif available_until:
+        label = f"В наличии · до {available_until} · {portions} порц."
+    else:
+        label = f"В наличии · {portions} порц."
+
+    return {
+        "is_available": is_available,
+        "availability_label": label,
+        "portions_available": portions,
+        "available_from": clean_str(dish.get("available_from", "")),
+        "available_until": available_until,
+    }
+
+
+def build_review_stats(
+    dishes: List[Dict[str, Any]], reviews: List[Dict[str, Any]]
+) -> tuple[Dict[int, Dict[str, float]], Dict[int, Dict[str, float]]]:
+    dish_to_cook: Dict[int, int] = {}
+    for dish in dishes:
+        dish_id = safe_int(str(dish.get("id", 0)), 0)
+        cook_id = safe_int(str(dish.get("cook_id", 0)), 0)
+        if dish_id > 0 and cook_id > 0:
+            dish_to_cook[dish_id] = cook_id
+
+    dish_stats: Dict[int, Dict[str, float]] = {}
+    cook_stats: Dict[int, Dict[str, float]] = {}
+    for review in reviews:
+        dish_id = safe_int(str(review.get("dish_id", 0)), 0)
+        rating = safe_float(str(review.get("rating", 0)), 0)
+        if dish_id <= 0 or rating <= 0:
+            continue
+
+        if dish_id not in dish_stats:
+            dish_stats[dish_id] = {"sum": 0.0, "count": 0.0}
+        dish_stats[dish_id]["sum"] += rating
+        dish_stats[dish_id]["count"] += 1
+
+        cook_id = dish_to_cook.get(dish_id)
+        if cook_id:
+            if cook_id not in cook_stats:
+                cook_stats[cook_id] = {"sum": 0.0, "count": 0.0}
+            cook_stats[cook_id]["sum"] += rating
+            cook_stats[cook_id]["count"] += 1
+
+    return dish_stats, cook_stats
+
+
+def enrich_dishes_with_reviews_and_availability(
+    dishes: List[Dict[str, Any]], reviews: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    dish_stats, _ = build_review_stats(dishes, reviews)
+    enriched: List[Dict[str, Any]] = []
+    for dish in dishes:
+        item = dict(dish)
+        dish_id = safe_int(str(item.get("id", 0)), 0)
+        stats = dish_stats.get(dish_id)
+        if stats and stats["count"] > 0:
+            item["rating"] = round_rating(stats["sum"] / stats["count"])
+            item["reviews_count"] = int(stats["count"])
+        else:
+            item["rating"] = safe_float(str(item.get("rating", 0)), 0)
+            item["reviews_count"] = 0
+
+        item.update(dish_availability(item))
+        enriched.append(item)
+
+    return enriched
+
+
+def enrich_cooks_with_reviews(
+    cooks: List[Dict[str, Any]],
+    dishes: List[Dict[str, Any]],
+    reviews: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    _, cook_stats = build_review_stats(dishes, reviews)
+    enriched: List[Dict[str, Any]] = []
+    for cook in cooks:
+        item = dict(cook)
+        cook_id = safe_int(str(item.get("id", 0)), 0)
+        stats = cook_stats.get(cook_id)
+        if stats and stats["count"] > 0:
+            item["rating"] = round_rating(stats["sum"] / stats["count"])
+            item["reviews_count"] = int(stats["count"])
+        else:
+            item["rating"] = safe_float(str(item.get("rating", 0)), 0)
+            item["reviews_count"] = 0
+        enriched.append(item)
+    return enriched
+
+
+def next_review_id(reviews: List[Dict[str, Any]]) -> str:
+    return f"REV-{datetime.now().strftime('%Y%m%d')}-{len(reviews) + 1:04d}"
+
+
 def map_cook_points(cooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     points: List[Dict[str, Any]] = []
     for cook in cooks:
@@ -159,6 +331,7 @@ def map_cook_points(cooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "name": cook.get("name"),
                 "district": cook.get("district"),
                 "rating": cook.get("rating"),
+                "reviews_count": cook.get("reviews_count", 0),
                 "verified": cook.get("verified", False),
                 "lat": location.get("lat"),
                 "lng": location.get("lng"),
@@ -196,8 +369,16 @@ class AppHandler(BaseHTTPRequestHandler):
             self.handle_create_dish()
             return
 
+        if parsed.path == "/api/checkout":
+            self.handle_checkout()
+            return
+
         if parsed.path == "/api/orders":
             self.handle_create_order()
+            return
+
+        if parsed.path == "/api/reviews":
+            self.handle_create_review()
             return
 
         if parsed.path == "/api/courier/book":
@@ -227,14 +408,37 @@ class AppHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, {"items": items, "total": len(items)})
             return
 
+        if path.startswith("/api/dishes/") and path.endswith("/reviews"):
+            dish_id = safe_int(path.split("/")[3], -1)
+            if dish_id <= 0:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "dish_id_invalid"})
+                return
+
+            reviews = read_reviews()
+            items = [item for item in reviews if safe_int(str(item.get("dish_id", 0)), 0) == dish_id]
+            items.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+            total = len(items)
+            average = (
+                round_rating(sum(safe_float(str(item.get("rating", 0)), 0) for item in items) / total)
+                if total
+                else 0
+            )
+            self.send_json(
+                HTTPStatus.OK,
+                {"items": items, "total": total, "average_rating": average},
+            )
+            return
+
         if path.startswith("/api/dishes/"):
             dish_id = safe_int(path.rsplit("/", 1)[-1], -1)
             if dish_id <= 0:
                 self.send_json(HTTPStatus.BAD_REQUEST, {"error": "dish_id_invalid"})
                 return
 
-            dishes = read_dishes()
-            cooks = read_json("cooks.json", [])
+            raw_dishes = read_dishes()
+            reviews = read_reviews()
+            dishes = enrich_dishes_with_reviews_and_availability(raw_dishes, reviews)
+            cooks = enrich_cooks_with_reviews(read_json("cooks.json", []), raw_dishes, reviews)
             dish = next((item for item in dishes if item.get("id") == dish_id), None)
             if not dish:
                 self.send_json(HTTPStatus.NOT_FOUND, {"error": "dish_not_found"})
@@ -258,7 +462,9 @@ class AppHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/cooks":
-            cooks = read_json("cooks.json", [])
+            raw_dishes = read_dishes()
+            reviews = read_reviews()
+            cooks = enrich_cooks_with_reviews(read_json("cooks.json", []), raw_dishes, reviews)
             district = self.query_value(query, "district", "all")
             if district and district != "all":
                 cooks = [item for item in cooks if item.get("district") == district]
@@ -266,13 +472,25 @@ class AppHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/cooks/map":
-            cooks = read_json("cooks.json", [])
+            raw_dishes = read_dishes()
+            reviews = read_reviews()
+            cooks = enrich_cooks_with_reviews(read_json("cooks.json", []), raw_dishes, reviews)
             district = self.query_value(query, "district", "all")
             if district and district != "all":
                 cooks = [item for item in cooks if item.get("district") == district]
 
             points = map_cook_points(cooks)
             self.send_json(HTTPStatus.OK, {"items": points, "total": len(points)})
+            return
+
+        if path == "/api/cart/preview":
+            ids_raw = self.query_value(query, "ids", "")
+            ids = {safe_int(item, -1) for item in ids_raw.split(",") if item.strip()}
+            ids = {item for item in ids if item > 0}
+            dishes = enrich_dishes_with_reviews_and_availability(read_dishes(), read_reviews())
+            if ids:
+                dishes = [item for item in dishes if safe_int(str(item.get("id", 0)), 0) in ids]
+            self.send_json(HTTPStatus.OK, {"items": dishes, "total": len(dishes)})
             return
 
         if path == "/api/subscriptions":
@@ -298,7 +516,8 @@ class AppHandler(BaseHTTPRequestHandler):
         return next((item for item in cooks if item.get("name") == cook_name), None)
 
     def filtered_dishes(self, query: Dict[str, List[str]]) -> List[Dict[str, Any]]:
-        dishes = read_dishes()
+        raw_dishes = read_dishes()
+        dishes = enrich_dishes_with_reviews_and_availability(raw_dishes, read_reviews())
 
         district = self.query_value(query, "district", "all")
         categories = csv_set(self.query_value(query, "categories", ""))
@@ -307,6 +526,16 @@ class AppHandler(BaseHTTPRequestHandler):
         max_price = safe_float(self.query_value(query, "max_price", "999999"), 999999)
         min_rating = safe_float(self.query_value(query, "min_rating", "0"), 0)
         sort_key = self.query_value(query, "sort", "rating")
+        ids = {
+            safe_int(item, -1)
+            for item in self.query_value(query, "ids", "").split(",")
+            if item.strip()
+        }
+        ids = {item for item in ids if item > 0}
+        available_only = self.query_value(query, "available_only", "0") == "1"
+
+        if ids:
+            dishes = [dish for dish in dishes if safe_int(str(dish.get("id", 0)), 0) in ids]
 
         if district and district != "all":
             dishes = [dish for dish in dishes if dish.get("district") == district]
@@ -336,6 +565,8 @@ class AppHandler(BaseHTTPRequestHandler):
 
         dishes = [dish for dish in dishes if safe_float(str(dish.get("price", 0)), 0) <= max_price]
         dishes = [dish for dish in dishes if safe_float(str(dish.get("rating", 0)), 0) >= min_rating]
+        if available_only:
+            dishes = [dish for dish in dishes if bool(dish.get("is_available"))]
 
         if sort_key == "price-asc":
             dishes.sort(key=lambda dish: dish.get("price", 0))
@@ -363,6 +594,9 @@ class AppHandler(BaseHTTPRequestHandler):
         price = safe_int(clean_str(form.getvalue("price")), 0)
         grams = safe_int(clean_str(form.getvalue("portion_grams")), 0)
         wait_minutes = safe_int(clean_str(form.getvalue("wait_minutes")), 40)
+        portions_available = safe_int(clean_str(form.getvalue("portions_available")), 0)
+        available_from = clean_str(form.getvalue("available_from"))
+        available_until = clean_str(form.getvalue("available_until"))
         tags = {clean_str(item) for item in form.getlist("tags") if clean_str(item)}
         delivery = {clean_str(item) for item in form.getlist("delivery") if clean_str(item)}
         allowed_delivery = {"pickup", "cook", "courier"}
@@ -381,6 +615,18 @@ class AppHandler(BaseHTTPRequestHandler):
             return
         if wait_minutes <= 0:
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "wait_minutes_invalid"})
+            return
+        if portions_available <= 0:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "portions_available_invalid"})
+            return
+        if not valid_hhmm(available_from):
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "available_from_invalid"})
+            return
+        if not valid_hhmm(available_until):
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "available_until_invalid"})
+            return
+        if available_from and available_until and hhmm_to_minutes(available_from) > hhmm_to_minutes(available_until):
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "availability_window_invalid"})
             return
         if delivery and not delivery.issubset(allowed_delivery):
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "delivery_invalid"})
@@ -417,7 +663,11 @@ class AppHandler(BaseHTTPRequestHandler):
             "wait": f"{wait_minutes} мин",
             "description": description or "Домашнее блюдо от локального повара.",
             "portion": f"{grams} г",
+            "portion_grams": grams,
             "image_url": image_url,
+            "portions_available": portions_available,
+            "available_from": available_from,
+            "available_until": available_until,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         dishes.append(dish)
@@ -468,6 +718,154 @@ class AppHandler(BaseHTTPRequestHandler):
 
         return {"image_url": f"/uploads/{filename}"}
 
+    def validate_checkout_items(
+        self, payload_items: Any, dishes: List[Dict[str, Any]]
+    ) -> tuple[List[Dict[str, Any]], Optional[str]]:
+        if not isinstance(payload_items, list) or not payload_items:
+            return [], "items_required"
+
+        dish_map = {
+            safe_int(str(dish.get("id", 0)), 0): dish
+            for dish in dishes
+            if safe_int(str(dish.get("id", 0)), 0) > 0
+        }
+
+        validated: List[Dict[str, Any]] = []
+        for row in payload_items:
+            if not isinstance(row, dict):
+                return [], "items_invalid"
+            dish_id = safe_int(str(row.get("dish_id", 0)), -1)
+            qty = safe_int(str(row.get("qty", 0)), 0)
+            if dish_id <= 0 or qty <= 0:
+                return [], "items_invalid"
+
+            dish = dish_map.get(dish_id)
+            if not dish:
+                return [], "dish_not_found"
+
+            enriched_dish = dict(dish)
+            enriched_dish.update(dish_availability(enriched_dish))
+            if not enriched_dish.get("is_available"):
+                return [], "dish_unavailable"
+            if qty > dish_portions_available(enriched_dish):
+                return [], "dish_stock_not_enough"
+
+            validated.append({"dish": dish, "qty": qty})
+
+        return validated, None
+
+    def handle_checkout(self) -> None:
+        payload = self.read_json_body()
+        raw_dishes = read_dishes()
+
+        checkout_rows, error = self.validate_checkout_items(payload.get("items"), raw_dishes)
+        if error:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": error})
+            return
+
+        delivery_mode = clean_str(payload.get("delivery_mode")) or "pickup"
+        if delivery_mode not in {"pickup", "cook", "courier"}:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "delivery_mode_invalid"})
+            return
+
+        total = 0
+        items: List[Dict[str, Any]] = []
+        for row in checkout_rows:
+            dish = row["dish"]
+            qty = row["qty"]
+            dish_delivery = set(dish.get("delivery", []))
+            if delivery_mode not in dish_delivery:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "delivery_mode_not_available"})
+                return
+            price = safe_int(str(dish.get("price", 0)), 0)
+            total += price * qty
+            items.append(
+                {
+                    "dish_id": dish.get("id"),
+                    "dish_title": dish.get("title"),
+                    "cook_id": dish.get("cook_id"),
+                    "cook": dish.get("cook"),
+                    "qty": qty,
+                    "unit_price": price,
+                    "subtotal": price * qty,
+                }
+            )
+
+        for row in checkout_rows:
+            dish = row["dish"]
+            qty = row["qty"]
+            current = dish_portions_available(dish)
+            dish["portions_available"] = max(0, current - qty)
+
+        write_dishes(raw_dishes)
+
+        orders = read_orders()
+        order = {
+            "id": next_order_id(orders),
+            "items": items,
+            "total_price": total,
+            "districts": [],
+            "city": clean_str(payload.get("city")) or "Москва",
+            "customer_name": clean_str(payload.get("customer_name")) or "Гость",
+            "customer_phone": clean_str(payload.get("customer_phone")),
+            "address": clean_str(payload.get("address")),
+            "comment": clean_str(payload.get("comment")),
+            "delivery_mode": delivery_mode,
+            "status": "new",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        order["districts"] = sorted(
+            {
+                clean_str(item["dish"].get("district", ""))
+                for item in checkout_rows
+                if clean_str(item["dish"].get("district", ""))
+            }
+        )
+        orders.append(order)
+        write_orders(orders)
+
+        self.send_json(HTTPStatus.CREATED, {"order": order})
+
+    def handle_create_review(self) -> None:
+        payload = self.read_json_body()
+        dish_id = safe_int(str(payload.get("dish_id", 0)), -1)
+        rating = safe_float(str(payload.get("rating", 0)), 0)
+        customer_name = clean_str(payload.get("customer_name")) or "Покупатель"
+        text = clean_str(payload.get("text"))
+        order_id = clean_str(payload.get("order_id"))
+
+        if dish_id <= 0:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "dish_id_invalid"})
+            return
+        if rating < 1 or rating > 5:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "rating_invalid"})
+            return
+        if len(text) < 3:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "text_too_short"})
+            return
+
+        dishes = read_dishes()
+        dish = next((item for item in dishes if safe_int(str(item.get("id", 0)), 0) == dish_id), None)
+        if not dish:
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "dish_not_found"})
+            return
+
+        reviews = read_reviews()
+        review = {
+            "id": next_review_id(reviews),
+            "dish_id": dish_id,
+            "cook_id": dish.get("cook_id"),
+            "order_id": order_id,
+            "customer_name": customer_name,
+            "rating": round_rating(rating),
+            "text": text,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        reviews.append(review)
+        write_reviews(reviews)
+
+        self.send_json(HTTPStatus.CREATED, {"review": review})
+
     def handle_create_order(self) -> None:
         payload = self.read_json_body()
         dish_id = payload.get("dish_id")
@@ -488,10 +886,27 @@ class AppHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "dish_not_found"})
             return
 
+        dish_with_availability = dict(dish)
+        dish_with_availability.update(dish_availability(dish_with_availability))
+        if not dish_with_availability.get("is_available"):
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "dish_unavailable"})
+            return
+
         delivery_mode = payload.get("delivery_mode") or (dish.get("delivery") or ["pickup"])[0]
         if delivery_mode not in set(dish.get("delivery", [])):
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "delivery_mode_not_available"})
             return
+
+        qty = safe_int(str(payload.get("qty", 1)), 1)
+        if qty <= 0:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "qty_invalid"})
+            return
+        if qty > dish_portions_available(dish):
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "dish_stock_not_enough"})
+            return
+
+        dish["portions_available"] = max(0, dish_portions_available(dish) - qty)
+        write_dishes(dishes)
 
         orders = read_orders()
         order = {
@@ -507,6 +922,8 @@ class AppHandler(BaseHTTPRequestHandler):
             "customer_phone": payload.get("customer_phone", ""),
             "address": payload.get("address", ""),
             "comment": payload.get("comment", ""),
+            "qty": qty,
+            "total_price": safe_int(str(dish.get("price", 0)), 0) * qty,
             "delivery_mode": delivery_mode,
             "status": "new",
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -669,8 +1086,9 @@ def run() -> None:
     server = ThreadingHTTPServer((host, port), AppHandler)
     print(f"DomEda MVP server running on http://{host}:{port}")
     print(
-        "Endpoints: /api/health, /api/dishes (GET/POST), /api/dishes/<id>, /api/cooks, "
-        "/api/cooks/map, /api/subscriptions, /api/orders"
+        "Endpoints: /api/health, /api/dishes (GET/POST), /api/dishes/<id>, "
+        "/api/dishes/<id>/reviews, /api/reviews, /api/cart/preview, /api/checkout, "
+        "/api/cooks, /api/cooks/map, /api/subscriptions, /api/orders"
     )
 
     try:

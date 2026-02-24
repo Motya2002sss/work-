@@ -2,7 +2,19 @@ const detailLayout = document.getElementById("detailLayout");
 const detailState = document.getElementById("detailState");
 const recommendedSection = document.getElementById("recommendedSection");
 const recommendedGrid = document.getElementById("recommendedGrid");
+const reviewsSummary = document.getElementById("reviewsSummary");
+const reviewsList = document.getElementById("reviewsList");
+const reviewForm = document.getElementById("reviewForm");
+const dishGoCartBtn = document.getElementById("dishGoCartBtn");
 const toast = document.getElementById("toast");
+
+const cartApi = window.DomEdaCart || {
+  read: () => [],
+  add: () => {},
+  count: () => 0,
+};
+
+let currentDish = null;
 
 const labelTag = (tag) => {
   const map = {
@@ -44,6 +56,13 @@ const getDishIdFromUrl = () => {
   return value;
 };
 
+const updateCartButton = () => {
+  if (!dishGoCartBtn) {
+    return;
+  }
+  dishGoCartBtn.textContent = `Корзина (${cartApi.count()})`;
+};
+
 const renderErrorState = (message) => {
   detailLayout.innerHTML = `
     <div class="detail-state">
@@ -67,6 +86,7 @@ const renderRecommended = (items) => {
   items.forEach((dish) => {
     const card = document.createElement("article");
     card.className = "dish-card";
+
     const imageBlock = dish.image_url
       ? `
         <img
@@ -95,97 +115,122 @@ const renderRecommended = (items) => {
       </div>
       <div class="dish-actions">
         <strong>${dish.price} ₽</strong>
-        <a class="btn small" href="/dish.html?id=${dish.id}">Открыть</a>
+        <div class="dish-buttons">
+          <button class="btn small ghost" type="button" data-add ${dish.is_available ? "" : "disabled"}>В корзину</button>
+          <a class="btn small" href="/dish.html?id=${dish.id}">Открыть</a>
+        </div>
       </div>
     `;
+
+    const addBtn = card.querySelector("[data-add]");
+    addBtn.addEventListener("click", () => {
+      cartApi.add(dish, 1);
+      showToast(`Добавлено: ${dish.title}`);
+    });
+
     recommendedGrid.appendChild(card);
   });
 };
 
-const syncAddressControl = (form) => {
-  const selected = form.querySelector("input[name=delivery_mode]:checked");
-  const addressField = form.querySelector("textarea[name=address]");
-
-  if (!selected || !addressField) {
+const renderReviews = (payload) => {
+  if (!reviewsSummary || !reviewsList) {
     return;
   }
 
-  if (selected.value === "pickup") {
-    addressField.value = "";
-    addressField.disabled = true;
-    addressField.required = false;
-    addressField.placeholder = "Для самовывоза адрес не нужен";
+  const items = payload.items || [];
+  const total = Number(payload.total || 0);
+  const avg = Number(payload.average_rating || 0);
+  reviewsSummary.textContent = total
+    ? `Средняя оценка: ${avg.toFixed(2)} · отзывов: ${total}`
+    : "Пока нет отзывов. Будьте первым.";
+
+  reviewsList.innerHTML = "";
+  if (!items.length) {
+    reviewsList.innerHTML = "<div class='review-empty'>Отзывов пока нет.</div>";
     return;
   }
 
-  addressField.disabled = false;
-  addressField.required = true;
-  addressField.placeholder = "Укажите адрес доставки";
+  items.forEach((item) => {
+    const node = document.createElement("article");
+    node.className = "review-item";
+    node.innerHTML = `
+      <div class="review-head">
+        <strong>${item.customer_name}</strong>
+        <span>${Number(item.rating).toFixed(1)} / 5</span>
+      </div>
+      <p>${item.text}</p>
+      <div class="review-meta">${item.created_at ? new Date(item.created_at).toLocaleString("ru-RU") : ""}</div>
+    `;
+    reviewsList.appendChild(node);
+  });
 };
 
-const attachOrderFormHandlers = (dish) => {
-  const form = document.getElementById("orderForm");
-  if (!form) {
+const fetchReviews = async (dishId) => {
+  try {
+    const response = await fetch(`/api/dishes/${dishId}/reviews`);
+    if (!response.ok) {
+      throw new Error("reviews_request_failed");
+    }
+    const payload = await response.json();
+    renderReviews(payload);
+  } catch (error) {
+    if (reviewsSummary) {
+      reviewsSummary.textContent = "Не удалось загрузить отзывы.";
+    }
+  }
+};
+
+const attachReviewFormHandlers = (dishId) => {
+  if (!reviewForm) {
     return;
   }
 
-  form.querySelectorAll("input[name=delivery_mode]").forEach((radio) => {
-    radio.addEventListener("change", () => {
-      syncAddressControl(form);
-    });
-  });
-
-  syncAddressControl(form);
-
-  form.addEventListener("submit", async (event) => {
+  reviewForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const submitButton = form.querySelector("button[type=submit]");
+    const formData = new FormData(reviewForm);
+    const payload = {
+      dish_id: dishId,
+      customer_name: formData.get("customer_name"),
+      rating: Number(formData.get("rating")),
+      order_id: formData.get("order_id"),
+      text: formData.get("text"),
+    };
+
+    const submitButton = reviewForm.querySelector("button[type=submit]");
     submitButton.disabled = true;
     submitButton.textContent = "Отправляем...";
 
-    const formData = new FormData(form);
-    const payload = {
-      dish_id: dish.id,
-      customer_name: formData.get("customer_name"),
-      customer_phone: formData.get("customer_phone"),
-      city: "Москва",
-      address: formData.get("address"),
-      comment: formData.get("comment"),
-      delivery_mode: formData.get("delivery_mode"),
-    };
-
     try {
-      const response = await fetch("/api/orders", {
+      const response = await fetch("/api/reviews", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
+      const result = await response.json();
       if (!response.ok) {
-        throw new Error("order_request_failed");
+        throw new Error(result.error || "review_failed");
       }
 
-      const result = await response.json();
-      showToast(`Заказ ${result.order.id} создан`);
-      form.reset();
-      const defaultMode = form.querySelector("input[name=delivery_mode]");
-      if (defaultMode) {
-        defaultMode.checked = true;
-      }
-      syncAddressControl(form);
+      showToast("Отзыв сохранен");
+      reviewForm.reset();
+      await reloadDishCard(dishId);
     } catch (error) {
-      showToast("Не удалось оформить заказ. Повторите попытку.");
+      const known = {
+        text_too_short: "Добавьте более подробный отзыв.",
+        rating_invalid: "Выберите корректную оценку.",
+      };
+      showToast(known[error.message] || "Не удалось отправить отзыв.");
     } finally {
       submitButton.disabled = false;
-      submitButton.textContent = "Подтвердить заказ";
+      submitButton.textContent = "Отправить отзыв";
     }
   });
 };
 
 const renderDishDetails = ({ dish, cook }) => {
+  currentDish = dish;
   const imageBlock = dish.image_url
     ? `
       <img
@@ -199,6 +244,8 @@ const renderDishDetails = ({ dish, cook }) => {
     : `
       <div class="detail-image-empty">Повар еще не загрузил фото блюда</div>
     `;
+
+  const isAvailable = !!dish.is_available;
 
   detailLayout.innerHTML = `
     <article class="detail-card">
@@ -222,7 +269,7 @@ const renderDishDetails = ({ dish, cook }) => {
         <div class="detail-block">
           <div class="detail-block-title">Повар</div>
           <div>${dish.cook}</div>
-          <div>Рейтинг: ${Number(dish.rating).toFixed(1)}</div>
+          <div>Рейтинг: ${Number(dish.rating).toFixed(2)} (${dish.reviews_count || 0})</div>
           <div>${cook && cook.verified ? "Верифицирован" : "Ожидает верификации"}</div>
         </div>
         <div class="detail-block">
@@ -231,62 +278,54 @@ const renderDishDetails = ({ dish, cook }) => {
           <div>Доставка: ${(dish.delivery || []).map(labelDelivery).join(", ")}</div>
         </div>
         <div class="detail-block">
-          <div class="detail-block-title">Локация повара</div>
-          <div>${cook && cook.location ? cook.location.label : "Москва"}</div>
-          <div>
-            ${
-              cook && cook.location
-                ? `Координаты: ${cook.location.lat}, ${cook.location.lng}`
-                : "Координаты появятся после подключения карты"
-            }
-          </div>
+          <div class="detail-block-title">Доступность</div>
+          <div>${dish.availability_label || "Проверка"}</div>
+          <div>Остаток: ${dish.portions_available || 0} порц.</div>
         </div>
       </div>
     </article>
 
     <article class="order-card">
-      <h3>Оформить заказ</h3>
-      <form id="orderForm" class="order-form">
+      <h3>Корзина</h3>
+      <p>Добавьте блюдо в корзину и оформите заказ на главной странице.</p>
+      <div class="detail-cart-controls">
         <label>
-          Имя
-          <input name="customer_name" type="text" required placeholder="Как к вам обращаться" />
+          Количество
+          <input id="detailQty" type="number" min="1" value="1" ${isAvailable ? "" : "disabled"} />
         </label>
-
-        <label>
-          Телефон
-          <input name="customer_phone" type="tel" placeholder="+7 (999) 000-00-00" />
-        </label>
-
-        <fieldset>
-          <legend>Способ получения</legend>
-          ${(dish.delivery || [])
-            .map(
-              (mode, index) => `
-            <label class="radio-row">
-              <input type="radio" name="delivery_mode" value="${mode}" ${index === 0 ? "checked" : ""} />
-              ${labelDelivery(mode)}
-            </label>
-          `
-            )
-            .join("")}
-        </fieldset>
-
-        <label>
-          Адрес
-          <textarea name="address" rows="2" placeholder="Укажите адрес доставки"></textarea>
-        </label>
-
-        <label>
-          Комментарий к заказу
-          <textarea name="comment" rows="3" placeholder="Например: без лука"></textarea>
-        </label>
-
-        <button class="btn full" type="submit">Подтвердить заказ</button>
-      </form>
+        <button id="detailAddToCartBtn" class="btn full" type="button" ${isAvailable ? "" : "disabled"}>
+          ${isAvailable ? "Добавить в корзину" : "Сейчас недоступно"}
+        </button>
+        <a class="btn ghost full" href="/index.html#cart-checkout">Перейти к оформлению</a>
+      </div>
     </article>
   `;
 
-  attachOrderFormHandlers(dish);
+  const addBtn = document.getElementById("detailAddToCartBtn");
+  const qtyInput = document.getElementById("detailQty");
+  if (addBtn && qtyInput && isAvailable) {
+    addBtn.addEventListener("click", () => {
+      const qty = Math.max(1, Number.parseInt(qtyInput.value, 10) || 1);
+      if (dish.portions_available && qty > dish.portions_available) {
+        showToast("Недостаточно порций в наличии");
+        return;
+      }
+      cartApi.add(dish, qty);
+      showToast(`Добавлено в корзину: ${dish.title} x${qty}`);
+    });
+  }
+};
+
+const reloadDishCard = async (dishId) => {
+  const response = await fetch(`/api/dishes/${dishId}`);
+  if (!response.ok) {
+    throw new Error("dish_request_failed");
+  }
+  const payload = await response.json();
+  renderDishDetails(payload);
+  renderRecommended(payload.recommended || []);
+  await fetchReviews(dishId);
+  updateCartButton();
 };
 
 const init = async () => {
@@ -296,15 +335,10 @@ const init = async () => {
     return;
   }
 
-  try {
-    const response = await fetch(`/api/dishes/${dishId}`);
-    if (!response.ok) {
-      throw new Error("dish_request_failed");
-    }
+  attachReviewFormHandlers(dishId);
 
-    const payload = await response.json();
-    renderDishDetails(payload);
-    renderRecommended(payload.recommended || []);
+  try {
+    await reloadDishCard(dishId);
   } catch (error) {
     renderErrorState("Блюдо не найдено или сервер недоступен.");
   }
@@ -314,4 +348,6 @@ if (detailState) {
   detailState.textContent = "Загрузка карточки блюда...";
 }
 
+window.addEventListener("domeda-cart-updated", updateCartButton);
+updateCartButton();
 init();

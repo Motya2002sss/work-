@@ -9,6 +9,7 @@
 
 - Frontend: `index.html`, `styles.css`, `app.js` (чистый JS)
 - Страница заказа блюда: `dish.html`, `dish.js`
+- Общая корзина клиента: `cart.js`
 - Кабинет повара: `cook.html`, `cook.js`
 - Backend: `backend/server.py` (Python stdlib, без внешних зависимостей)
 - Хранилище MVP: JSON-файлы в `backend/data`
@@ -31,11 +32,15 @@ http://127.0.0.1:8080
 - `GET /api/dishes` - блюда с фильтрами (`district`, `categories`, `delivery`, `min_rating`, `max_price`, `search`, `sort`)
 - `POST /api/dishes` - публикация блюда поваром (multipart: фото, цена, граммовка)
 - `GET /api/dishes/<id>` - карточка блюда + повар + рекомендации
+- `GET /api/dishes/<id>/reviews` - отзывы по блюду
 - `GET /api/cooks` - список поваров
 - `GET /api/cooks/map` - точки поваров (`lat/lng`) для подключения карты
+- `GET /api/cart/preview` - актуальные данные блюд для корзины
 - `GET /api/subscriptions` - тарифы подписки
 - `GET /api/orders` - список заказов
 - `POST /api/orders` - создать заказ
+- `POST /api/checkout` - оформить заказ по корзине из нескольких блюд
+- `POST /api/reviews` - добавить отзыв
 - `POST /api/courier/book` - аренда курьера на день
 - `POST /api/cooks/verification` - заявка на верификацию повара
 
@@ -49,6 +54,7 @@ http://127.0.0.1:8080
 │   └── data/
 │       ├── dishes.json
 │       ├── cooks.json
+│       ├── reviews.json
 │       ├── subscriptions.json
 │       ├── orders.json
 │       └── runtime/
@@ -58,6 +64,7 @@ http://127.0.0.1:8080
 ├── styles.css
 ├── app.js
 ├── dish.js
+├── cart.js
 ├── cook.js
 └── README.md
 ```
@@ -67,6 +74,9 @@ http://127.0.0.1:8080
 - Локальный landing + витрина блюд
 - Фильтрация, сортировка, поиск
 - Провал в карточку блюда и оформление заказа через API
+- Остатки и доступность блюд по времени
+- Корзина на несколько блюд и checkout одним заказом
+- Отзывы по блюдам с влиянием на рейтинг в выдаче
 - Подготовка к карте: точки поваров по районам Москвы
 - Повар может добавить блюдо с фото, граммовкой и своей ценой
 - Блоки подписки, верификации, рейтинга и доставки

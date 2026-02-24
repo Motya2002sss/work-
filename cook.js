@@ -33,6 +33,9 @@ const updatePreviewMeta = () => {
   const price = String(formData.get("price") || "").trim();
   const grams = String(formData.get("portion_grams") || "").trim();
   const wait = String(formData.get("wait_minutes") || "").trim();
+  const portions = String(formData.get("portions_available") || "").trim();
+  const availableFrom = String(formData.get("available_from") || "").trim();
+  const availableUntil = String(formData.get("available_until") || "").trim();
 
   const lines = [
     `<strong>${escapeHtml(title || "Название блюда")}</strong>`,
@@ -40,6 +43,8 @@ const updatePreviewMeta = () => {
     `<span>Цена: ${escapeHtml(price || "-")} ₽</span>`,
     `<span>Порция: ${escapeHtml(grams || "-")} г</span>`,
     `<span>Готовность: ${escapeHtml(wait || "-")} мин</span>`,
+    `<span>Порций: ${escapeHtml(portions || "-")}</span>`,
+    `<span>Окно: ${escapeHtml(availableFrom || "--:--")} - ${escapeHtml(availableUntil || "--:--")}</span>`,
   ];
 
   previewMeta.innerHTML = lines.join("");
@@ -149,6 +154,10 @@ const submitDish = async (event) => {
       cook_id_required: "Выберите повара.",
       price_invalid: "Проверьте цену.",
       portion_grams_invalid: "Проверьте граммовку.",
+      portions_available_invalid: "Укажите количество порций.",
+      available_from_invalid: "Проверьте время начала приема.",
+      available_until_invalid: "Проверьте время окончания приема.",
+      availability_window_invalid: "Время начала должно быть раньше окончания.",
     };
     showToast(knownErrors[error.message] || "Не удалось опубликовать блюдо.");
   } finally {
