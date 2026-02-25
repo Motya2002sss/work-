@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ДомЕда — заказы</title>
+    <meta name="description" content="Управление заказами: трекинг клиента и рабочий стол повара." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&family=Unbounded:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">ДомЕда</span>
+          <span class="brand-sub">Трекинг заказов</span>
+        </div>
+        <nav class="nav">
+          <a href="/index.html#market">Витрина</a>
+          <a href="/index.html#cart-checkout">Корзина</a>
+          <a href="/cook.html">Кабинет повара</a>
+        </nav>
+        <div class="topbar-actions">
+          <a class="btn ghost" href="/index.html">На главную</a>
+        </div>
+      </header>
+
+      <main>
+        <section class="section orders-page">
+          <div class="section-head">
+            <div>
+              <h2>Заказы</h2>
+              <p>Клиент отслеживает, повар переводит заказ по этапам.</p>
+            </div>
+          </div>
+
+          <div class="orders-overview" id="ordersOverview">
+            <div class="overview-card"><strong id="overviewTotal">0</strong><span>Всего</span></div>
+            <div class="overview-card"><strong id="overviewActive">0</strong><span>В работе</span></div>
+            <div class="overview-card"><strong id="overviewDone">0</strong><span>Завершено</span></div>
+          </div>
+
+          <div class="orders-layout">
+            <article class="orders-panel">
+              <div class="orders-panel-head">
+                <h3>Клиентский трекинг</h3>
+                <button id="customerRefreshBtn" class="btn ghost small" type="button">Обновить</button>
+              </div>
+
+              <form id="customerFilterForm" class="orders-filter-form">
+                <label>
+                  Телефон клиента
+                  <input id="customerPhoneInput" type="text" placeholder="+7 (999) 123-45-67" />
+                </label>
+                <label>
+                  Имя клиента
+                  <input id="customerNameInput" type="text" placeholder="Имя" />
+                </label>
+              </form>
+
+              <div id="customerOrders" class="orders-list"></div>
+            </article>
+
+            <article class="orders-panel">
+              <div class="orders-panel-head">
+                <h3>Управление повара</h3>
+                <button id="cookRefreshBtn" class="btn ghost small" type="button">Обновить</button>
+              </div>
+
+              <form id="cookFilterForm" class="orders-filter-form">
+                <label>
+                  Повар
+                  <select id="cookSelectOrders">
+                    <option value="">Загрузка...</option>
+                  </select>
+                </label>
+                <label>
+                  Статус
+                  <select id="cookStatusFilter">
+                    <option value="all">Все статусы</option>
+                    <option value="paid">Оплачен</option>
+                    <option value="accepted">Принят</option>
+                    <option value="cooking">Готовится</option>
+                    <option value="ready">Готов</option>
+                    <option value="delivering">В пути</option>
+                    <option value="completed">Завершен</option>
+                    <option value="cancelled">Отменен</option>
+                  </select>
+                </label>
+              </form>
+
+              <div id="cookOrders" class="orders-list"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <div>
+          <div class="brand-mark">ДомЕда</div>
+          <div class="footer-meta">Управление статусами заказов</div>
+        </div>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast">Статус обновлен</div>
+
+    <script src="orders.js"></script>
+  </body>
+</html>

@@ -20,16 +20,39 @@ RUNTIME_DIR = DATA_DIR / "runtime"
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ORDER_STATUS_LABELS = {
+    "new": "Новый",
+    "paid": "Оплачен",
+    "accepted": "Принят",
+    "cooking": "Готовится",
+    "ready": "Готов к выдаче",
+    "delivering": "В пути",
+    "completed": "Завершен",
+    "cancelled": "Отменен",
+}
+ORDER_STATUS_FLOW = ["new", "paid", "accepted", "cooking", "ready", "delivering", "completed", "cancelled"]
+ORDER_STATUS_TRANSITIONS = {
+    "new": {"accepted", "cancelled"},
+    "paid": {"accepted", "cancelled"},
+    "accepted": {"cooking", "cancelled"},
+    "cooking": {"ready", "cancelled"},
+    "ready": {"delivering", "completed", "cancelled"},
+    "delivering": {"completed", "cancelled"},
+    "completed": set(),
+    "cancelled": set(),
+}
 STATIC_FILES = {
     "/": "index.html",
     "/index.html": "index.html",
     "/dish.html": "dish.html",
     "/cook.html": "cook.html",
+    "/orders.html": "orders.html",
     "/styles.css": "styles.css",
     "/app.js": "app.js",
     "/dish.js": "dish.js",
     "/cook.js": "cook.js",
     "/cart.js": "cart.js",
+    "/orders.js": "orders.js",
 }
 
 
@@ -378,12 +401,43 @@ def next_review_id(reviews: List[Dict[str, Any]]) -> str:
     return f"REV-{datetime.now().strftime('%Y%m%d')}-{len(reviews) + 1:04d}"
 
 
-def map_cook_points(cooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def map_cook_points(cooks: List[Dict[str, Any]], dishes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    cook_menu: Dict[int, Dict[str, Any]] = {}
+    for dish in dishes:
+        cook_id = safe_int(str(dish.get("cook_id", 0)), 0)
+        if cook_id <= 0:
+            continue
+
+        if cook_id not in cook_menu:
+            cook_menu[cook_id] = {
+                "dishes_count": 0,
+                "available_dishes_count": 0,
+                "min_price": 0,
+            }
+
+        stats = cook_menu[cook_id]
+        stats["dishes_count"] += 1
+        if bool(dish.get("is_available")):
+            stats["available_dishes_count"] += 1
+
+        price = safe_int(str(dish.get("price", 0)), 0)
+        if price > 0 and (stats["min_price"] == 0 or price < stats["min_price"]):
+            stats["min_price"] = price
+
     points: List[Dict[str, Any]] = []
     for cook in cooks:
         location = cook.get("location", {})
         if "lat" not in location or "lng" not in location:
             continue
+        cook_id = safe_int(str(cook.get("id", 0)), 0)
+        menu = cook_menu.get(
+            cook_id,
+            {
+                "dishes_count": 0,
+                "available_dishes_count": 0,
+                "min_price": 0,
+            },
+        )
 
         points.append(
             {
@@ -396,10 +450,151 @@ def map_cook_points(cooks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "lat": location.get("lat"),
                 "lng": location.get("lng"),
                 "label": location.get("label", ""),
+                "dishes_count": menu["dishes_count"],
+                "available_dishes_count": menu["available_dishes_count"],
+                "min_price": menu["min_price"],
             }
         )
 
     return points
+
+
+def order_items(order: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if isinstance(order.get("items"), list) and order.get("items"):
+        return [item for item in order.get("items", []) if isinstance(item, dict)]
+
+    dish_id = safe_int(str(order.get("dish_id", 0)), 0)
+    if dish_id <= 0:
+        return []
+
+    qty = max(1, safe_int(str(order.get("qty", 1)), 1))
+    unit_price = safe_int(str(order.get("price", 0)), 0)
+    return [
+        {
+            "dish_id": dish_id,
+            "dish_title": clean_str(order.get("dish_title")),
+            "cook_id": safe_int(str(order.get("cook_id", 0)), 0),
+            "cook": clean_str(order.get("cook")),
+            "qty": qty,
+            "unit_price": unit_price,
+            "subtotal": unit_price * qty,
+        }
+    ]
+
+
+def order_cook_ids(order: Dict[str, Any]) -> List[int]:
+    ids = set()
+    for item in order_items(order):
+        cook_id = safe_int(str(item.get("cook_id", 0)), 0)
+        if cook_id > 0:
+            ids.add(cook_id)
+    if not ids:
+        fallback = safe_int(str(order.get("cook_id", 0)), 0)
+        if fallback > 0:
+            ids.add(fallback)
+    return sorted(ids)
+
+
+def order_total_price(order: Dict[str, Any]) -> int:
+    if safe_int(str(order.get("total_price", 0)), 0) > 0:
+        return safe_int(str(order.get("total_price", 0)), 0)
+    total = 0
+    for item in order_items(order):
+        subtotal = safe_int(str(item.get("subtotal", 0)), 0)
+        if subtotal <= 0:
+            qty = max(1, safe_int(str(item.get("qty", 1)), 1))
+            unit_price = safe_int(str(item.get("unit_price", 0)), 0)
+            subtotal = qty * unit_price
+        total += subtotal
+    return total
+
+
+def normalize_order_status(status: str) -> str:
+    value = clean_str(status).lower()
+    if value in ORDER_STATUS_LABELS:
+        return value
+    return "new"
+
+
+def order_status_history(order: Dict[str, Any]) -> List[Dict[str, Any]]:
+    history = order.get("status_history")
+    if isinstance(history, list) and history:
+        normalized = []
+        for event in history:
+            if not isinstance(event, dict):
+                continue
+            normalized.append(
+                {
+                    "status": normalize_order_status(event.get("status", "")),
+                    "at": clean_str(event.get("at")) or clean_str(order.get("created_at")),
+                    "by": clean_str(event.get("by")) or "system",
+                    "note": clean_str(event.get("note")),
+                }
+            )
+        if normalized:
+            return normalized
+
+    created_at = clean_str(order.get("created_at")) or datetime.now(timezone.utc).isoformat()
+    return [
+        {
+            "status": normalize_order_status(order.get("status", "new")),
+            "at": created_at,
+            "by": "system",
+            "note": "",
+        }
+    ]
+
+
+def append_order_status_history(order: Dict[str, Any], status: str, actor: str, note: str) -> None:
+    history = order_status_history(order)
+    history.append(
+        {
+            "status": normalize_order_status(status),
+            "at": datetime.now(timezone.utc).isoformat(),
+            "by": clean_str(actor) or "system",
+            "note": clean_str(note),
+        }
+    )
+    order["status_history"] = history
+
+
+def order_status_label(status: str) -> str:
+    return ORDER_STATUS_LABELS.get(status, status)
+
+
+def order_allows_status(order: Dict[str, Any], next_status: str) -> bool:
+    current = normalize_order_status(order.get("status", "new"))
+    if next_status == current:
+        return True
+    allowed = set(ORDER_STATUS_TRANSITIONS.get(current, set()))
+
+    if current == "ready" and clean_str(order.get("delivery_mode")) == "pickup":
+        allowed.discard("delivering")
+
+    return next_status in allowed
+
+
+def enrich_order(order: Dict[str, Any]) -> Dict[str, Any]:
+    item = dict(order)
+    item["items"] = order_items(item)
+    item["item_count"] = sum(max(1, safe_int(str(row.get("qty", 1)), 1)) for row in item["items"])
+    item["total_price"] = order_total_price(item)
+    item["cook_ids"] = order_cook_ids(item)
+    item["status"] = normalize_order_status(item.get("status", "new"))
+    item["status_label"] = order_status_label(item["status"])
+    history = order_status_history(item)
+    item["status_history"] = [
+        {
+            **event,
+            "status_label": order_status_label(event.get("status", "")),
+        }
+        for event in history
+    ]
+    allowed = set(ORDER_STATUS_TRANSITIONS.get(item["status"], set()))
+    if item["status"] == "ready" and clean_str(item.get("delivery_mode")) == "pickup":
+        allowed.discard("delivering")
+    item["next_statuses"] = [status for status in ORDER_STATUS_FLOW if status in allowed]
+    return item
 
 
 class AppHandler(BaseHTTPRequestHandler):
@@ -431,6 +626,11 @@ class AppHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/checkout":
             self.handle_checkout()
+            return
+
+        if parsed.path.startswith("/api/orders/") and parsed.path.endswith("/status"):
+            order_id = parsed.path.split("/")[3]
+            self.handle_update_order_status(order_id)
             return
 
         if parsed.path == "/api/orders":
@@ -534,12 +734,16 @@ class AppHandler(BaseHTTPRequestHandler):
         if path == "/api/cooks/map":
             raw_dishes = read_dishes()
             reviews = read_reviews()
+            dishes = enrich_dishes_with_reviews_and_availability(raw_dishes, reviews)
             cooks = enrich_cooks_with_reviews(read_json("cooks.json", []), raw_dishes, reviews)
             district = self.query_value(query, "district", "all")
             if district and district != "all":
                 cooks = [item for item in cooks if item.get("district") == district]
+            available_only = self.query_value(query, "available_only", "0") == "1"
 
-            points = map_cook_points(cooks)
+            points = map_cook_points(cooks, dishes)
+            if available_only:
+                points = [item for item in points if safe_int(str(item.get("available_dishes_count", 0)), 0) > 0]
             self.send_json(HTTPStatus.OK, {"items": points, "total": len(points)})
             return
 
@@ -559,8 +763,54 @@ class AppHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/orders":
-            orders = read_orders()
+            orders = [enrich_order(item) for item in read_orders()]
+            role = self.query_value(query, "role", "all")
+            cook_id = safe_int(self.query_value(query, "cook_id", "0"), 0)
+            requested_status = clean_str(self.query_value(query, "status", "all")).lower()
+            customer_phone = clean_str(self.query_value(query, "customer_phone", ""))
+            customer_name = clean_str(self.query_value(query, "customer_name", "")).lower()
+            order_id = clean_str(self.query_value(query, "order_id", ""))
+
+            if role == "cook" and cook_id > 0:
+                orders = [item for item in orders if cook_id in item.get("cook_ids", [])]
+
+            if role == "customer":
+                if customer_phone:
+                    phone_digits = digits_only(customer_phone)
+                    orders = [
+                        item
+                        for item in orders
+                        if phone_digits
+                        and phone_digits in digits_only(item.get("customer_phone", ""))
+                    ]
+                if customer_name:
+                    orders = [
+                        item
+                        for item in orders
+                        if customer_name in clean_str(item.get("customer_name", "")).lower()
+                    ]
+
+            if order_id:
+                orders = [item for item in orders if clean_str(item.get("id")) == order_id]
+
+            if requested_status != "all":
+                if requested_status in ORDER_STATUS_LABELS:
+                    orders = [item for item in orders if item.get("status") == requested_status]
+                else:
+                    orders = []
+
+            orders.sort(key=lambda item: item.get("created_at", ""), reverse=True)
             self.send_json(HTTPStatus.OK, {"items": orders, "total": len(orders)})
+            return
+
+        if path.startswith("/api/orders/") and not path.endswith("/status"):
+            order_id = path.rsplit("/", 1)[-1]
+            orders = [enrich_order(item) for item in read_orders()]
+            order = next((item for item in orders if clean_str(item.get("id")) == order_id), None)
+            if not order:
+                self.send_json(HTTPStatus.NOT_FOUND, {"error": "order_not_found"})
+                return
+            self.send_json(HTTPStatus.OK, {"order": order})
             return
 
         if path == "/api/payments":
@@ -592,6 +842,7 @@ class AppHandler(BaseHTTPRequestHandler):
         max_price = safe_float(self.query_value(query, "max_price", "999999"), 999999)
         min_rating = safe_float(self.query_value(query, "min_rating", "0"), 0)
         sort_key = self.query_value(query, "sort", "rating")
+        cook_id = safe_int(self.query_value(query, "cook_id", "0"), 0)
         ids = {
             safe_int(item, -1)
             for item in self.query_value(query, "ids", "").split(",")
@@ -605,6 +856,13 @@ class AppHandler(BaseHTTPRequestHandler):
 
         if district and district != "all":
             dishes = [dish for dish in dishes if dish.get("district") == district]
+
+        if cook_id > 0:
+            dishes = [
+                dish
+                for dish in dishes
+                if safe_int(str(dish.get("cook_id", 0)), 0) == cook_id
+            ]
 
         if categories:
             dishes = [
@@ -948,6 +1206,15 @@ class AppHandler(BaseHTTPRequestHandler):
             "comment": clean_str(payload.get("comment")),
             "delivery_mode": delivery_mode,
             "status": "paid",
+            "status_label": order_status_label("paid"),
+            "status_history": [
+                {
+                    "status": "paid",
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "by": "payment",
+                    "note": "Оплата подтверждена",
+                }
+            ],
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         order["districts"] = sorted(
@@ -1012,6 +1279,46 @@ class AppHandler(BaseHTTPRequestHandler):
 
         self.send_json(HTTPStatus.CREATED, {"review": review})
 
+    def handle_update_order_status(self, order_id: str) -> None:
+        payload = self.read_json_body()
+        requested_status = clean_str(payload.get("status")).lower()
+        actor = clean_str(payload.get("actor")) or "cook"
+        note = clean_str(payload.get("note"))
+
+        if requested_status not in ORDER_STATUS_LABELS:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "status_invalid"})
+            return
+
+        orders = read_orders()
+        target = next((item for item in orders if clean_str(item.get("id")) == order_id), None)
+        if not target:
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "order_not_found"})
+            return
+
+        current_status = normalize_order_status(target.get("status", "new"))
+        if not order_allows_status(target, requested_status):
+            self.send_json(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "error": "status_transition_invalid",
+                    "current_status": current_status,
+                    "requested_status": requested_status,
+                },
+            )
+            return
+
+        if current_status != requested_status:
+            target["status"] = requested_status
+            target["status_label"] = order_status_label(requested_status)
+            append_order_status_history(target, requested_status, actor, note)
+            if requested_status == "completed":
+                target["completed_at"] = datetime.now(timezone.utc).isoformat()
+            if requested_status == "cancelled":
+                target["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+            write_orders(orders)
+
+        self.send_json(HTTPStatus.OK, {"order": enrich_order(target)})
+
     def handle_create_order(self) -> None:
         payload = self.read_json_body()
         dish_id = payload.get("dish_id")
@@ -1072,6 +1379,15 @@ class AppHandler(BaseHTTPRequestHandler):
             "total_price": safe_int(str(dish.get("price", 0)), 0) * qty,
             "delivery_mode": delivery_mode,
             "status": "new",
+            "status_label": order_status_label("new"),
+            "status_history": [
+                {
+                    "status": "new",
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "by": "customer",
+                    "note": "Заказ создан",
+                }
+            ],
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         orders.append(order)
@@ -1234,7 +1550,8 @@ def run() -> None:
     print(
         "Endpoints: /api/health, /api/dishes (GET/POST), /api/dishes/<id>, "
         "/api/dishes/<id>/reviews, /api/reviews, /api/cart/preview, /api/checkout, "
-        "/api/cooks, /api/cooks/map, /api/subscriptions, /api/orders, /api/payments"
+        "/api/orders, /api/orders/<id>, /api/orders/<id>/status, /api/payments, "
+        "/api/cooks, /api/cooks/map, /api/subscriptions"
     )
 
     try:

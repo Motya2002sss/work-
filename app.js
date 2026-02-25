@@ -9,6 +9,8 @@ const filters = {
   availableOnly: false,
 };
 
+let activeCook = null;
+
 const dishGrid = document.getElementById("dishGrid");
 const priceInput = document.getElementById("price");
 const priceValue = document.getElementById("priceValue");
@@ -19,6 +21,10 @@ const searchInput = document.getElementById("searchInput");
 const availableOnlyInput = document.getElementById("availableOnly");
 const mapPoints = document.getElementById("mapPoints");
 const mapStatus = document.getElementById("mapStatus");
+const liveCookMapNode = document.getElementById("liveCookMap");
+const activeCookFilter = document.getElementById("activeCookFilter");
+const activeCookFilterName = document.getElementById("activeCookFilterName");
+const clearCookFilterBtn = document.getElementById("clearCookFilter");
 const goCartBtn = document.getElementById("goCartBtn");
 
 const cartItemsNode = document.getElementById("cartItems");
@@ -33,6 +39,9 @@ const toast = document.getElementById("toast");
 
 let dishesRequestId = 0;
 let mapRequestId = 0;
+let mapPointsCache = [];
+let liveMapInstance = null;
+let liveMapLayer = null;
 
 const cartApi = window.DomEdaCart || {
   read: () => [],
@@ -91,6 +100,178 @@ const escapeHtml = (value) => {
   return div.innerHTML;
 };
 
+const numberValue = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const activeCookLabel = () => {
+  if (!activeCook) {
+    return "";
+  }
+  if (activeCook.name) {
+    return activeCook.name;
+  }
+  return `Повар #${activeCook.id}`;
+};
+
+const syncActiveCookFilterBar = () => {
+  if (!activeCookFilter || !activeCookFilterName) {
+    return;
+  }
+
+  if (!activeCook) {
+    activeCookFilter.hidden = true;
+    activeCookFilterName.textContent = "Не выбран";
+    return;
+  }
+
+  activeCookFilter.hidden = false;
+  activeCookFilterName.textContent = activeCookLabel();
+};
+
+const applyInitialFiltersFromUrl = () => {
+  const params = new URLSearchParams(window.location.search);
+  const queryDistrict = String(params.get("district") || "").trim();
+  const queryCookId = numberValue(params.get("cook_id"));
+  const queryCookName = String(params.get("cook_name") || "").trim();
+
+  if (queryDistrict && districtSelect) {
+    const validDistrict = [...districtSelect.options].some((item) => item.value === queryDistrict);
+    if (validDistrict) {
+      filters.district = queryDistrict;
+    }
+  }
+
+  if (queryCookId > 0) {
+    activeCook = {
+      id: queryCookId,
+      name: queryCookName,
+    };
+  }
+};
+
+const clearActiveCook = (withToast = false) => {
+  if (!activeCook) {
+    return;
+  }
+  activeCook = null;
+  syncActiveCookFilterBar();
+  fetchDishes();
+  fetchMapPoints();
+  if (withToast) {
+    showToast("Фильтр повара сброшен");
+  }
+};
+
+const ensureLiveCookMap = () => {
+  if (!liveCookMapNode) {
+    return null;
+  }
+  if (liveMapInstance) {
+    return liveMapInstance;
+  }
+  if (!window.L) {
+    liveCookMapNode.classList.add("fallback");
+    liveCookMapNode.textContent = "Карта недоступна, используйте список точек справа.";
+    return null;
+  }
+
+  liveCookMapNode.classList.remove("fallback");
+  liveCookMapNode.textContent = "";
+  liveMapInstance = window.L.map(liveCookMapNode, {
+    zoomControl: true,
+  });
+  liveMapLayer = window.L.layerGroup().addTo(liveMapInstance);
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap",
+    maxZoom: 19,
+  }).addTo(liveMapInstance);
+  liveMapInstance.setView([55.751244, 37.618423], 10);
+  return liveMapInstance;
+};
+
+const formatPointPrice = (point) => {
+  const minPrice = numberValue(point.min_price);
+  if (minPrice > 0) {
+    return `от ${minPrice} ₽`;
+  }
+  return "цена уточняется";
+};
+
+const selectCookFromPoint = (point, shouldScroll) => {
+  if (!point || numberValue(point.id) <= 0) {
+    return;
+  }
+
+  activeCook = {
+    id: numberValue(point.id),
+    name: String(point.name || "").trim(),
+  };
+  syncActiveCookFilterBar();
+  renderMapPoints(mapPointsCache);
+  fetchDishes();
+
+  if (shouldScroll) {
+    const market = document.getElementById("market");
+    if (market) {
+      market.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+};
+
+const renderMapMarkers = (points) => {
+  const map = ensureLiveCookMap();
+  if (!map || !liveMapLayer) {
+    return;
+  }
+
+  liveMapLayer.clearLayers();
+
+  if (!points.length) {
+    map.setView([55.751244, 37.618423], 10);
+    return;
+  }
+
+  const bounds = [];
+  points.forEach((point) => {
+    const lat = numberValue(point.lat);
+    const lng = numberValue(point.lng);
+    if (!lat || !lng) {
+      return;
+    }
+
+    const marker = window.L.marker([lat, lng]);
+    marker.bindPopup(
+      `
+        <strong>${escapeHtml(point.name)}</strong><br />
+        ${escapeHtml(point.district)}<br />
+        Рейтинг: ${numberValue(point.rating).toFixed(1)}<br />
+        Меню: ${numberValue(point.available_dishes_count)}/${numberValue(point.dishes_count)}<br />
+        ${formatPointPrice(point)}
+      `
+    );
+    marker.on("click", () => {
+      selectCookFromPoint(point, true);
+    });
+    marker.addTo(liveMapLayer);
+    bounds.push([lat, lng]);
+
+    if (activeCook && numberValue(activeCook.id) === numberValue(point.id)) {
+      marker.openPopup();
+      map.setView([lat, lng], 12);
+    }
+  });
+
+  if (!bounds.length) {
+    return;
+  }
+
+  if (!activeCook) {
+    map.fitBounds(bounds, { padding: [25, 25] });
+  }
+};
+
 const buildDishesQuery = () => {
   const params = new URLSearchParams();
   params.set("max_price", String(filters.maxPrice));
@@ -118,6 +299,10 @@ const buildDishesQuery = () => {
 
   if (filters.availableOnly) {
     params.set("available_only", "1");
+  }
+
+  if (activeCook && activeCook.id > 0) {
+    params.set("cook_id", String(activeCook.id));
   }
 
   params.set("sort", filters.sort);
@@ -254,6 +439,7 @@ const renderMapLoading = () => {
   }
   mapStatus.textContent = "Загружаем точки поваров...";
   mapPoints.innerHTML = "";
+  renderMapMarkers([]);
 };
 
 const renderMapError = () => {
@@ -262,6 +448,7 @@ const renderMapError = () => {
   }
   mapStatus.textContent = "Не удалось загрузить точки. Проверьте API.";
   mapPoints.innerHTML = "";
+  renderMapMarkers([]);
 };
 
 const renderMapPoints = (items) => {
@@ -270,32 +457,44 @@ const renderMapPoints = (items) => {
   }
 
   mapPoints.innerHTML = "";
-  mapStatus.textContent = `Найдено точек: ${items.length}`;
+  const active = items.filter((point) => numberValue(point.available_dishes_count) > 0).length;
+  mapStatus.textContent = `Найдено точек: ${items.length} · с активным меню: ${active}`;
 
   if (!items.length) {
     const empty = document.createElement("div");
     empty.className = "map-point";
     empty.textContent = "В выбранном районе пока нет поваров.";
     mapPoints.appendChild(empty);
+    renderMapMarkers(items);
     return;
   }
 
   items.forEach((point) => {
     const item = document.createElement("article");
-    item.className = "map-point";
+    const isActive = activeCook && numberValue(activeCook.id) === numberValue(point.id);
+    item.className = `map-point${isActive ? " active" : ""}`;
     item.innerHTML = `
       <div class="map-point-head">
-        <strong>${point.name}</strong>
-        <span>${point.district}</span>
+        <strong>${escapeHtml(point.name)}</strong>
+        <span>${escapeHtml(point.district)}</span>
       </div>
       <div class="map-point-body">
-        <div>Рейтинг: ${Number(point.rating).toFixed(1)}</div>
-        <div>${point.label}</div>
-        <div>Координаты: ${point.lat}, ${point.lng}</div>
+        <div>Рейтинг: ${numberValue(point.rating).toFixed(1)}</div>
+        <div>Меню: ${numberValue(point.available_dishes_count)}/${numberValue(point.dishes_count)}</div>
+        <div>${formatPointPrice(point)}</div>
+        <div>${escapeHtml(point.label)}</div>
+      </div>
+      <div class="map-point-actions">
+        <button class="btn small ghost" type="button" data-open-menu>Показать блюда</button>
       </div>
     `;
+    item.querySelector("[data-open-menu]").addEventListener("click", () => {
+      selectCookFromPoint(point, true);
+    });
     mapPoints.appendChild(item);
   });
+
+  renderMapMarkers(items);
 };
 
 const fetchMapPoints = async () => {
@@ -311,6 +510,9 @@ const fetchMapPoints = async () => {
     if (filters.district !== "all") {
       params.set("district", filters.district);
     }
+    if (filters.availableOnly) {
+      params.set("available_only", "1");
+    }
 
     const query = params.toString();
     const url = query ? `/api/cooks/map?${query}` : "/api/cooks/map";
@@ -325,7 +527,20 @@ const fetchMapPoints = async () => {
       return;
     }
 
-    renderMapPoints(payload.items || []);
+    mapPointsCache = payload.items || [];
+    if (activeCook) {
+      const selectedPoint = mapPointsCache.find(
+        (point) => numberValue(point.id) === numberValue(activeCook.id)
+      );
+      if (!selectedPoint) {
+        activeCook = null;
+        syncActiveCookFilterBar();
+      } else if (!activeCook.name) {
+        activeCook.name = String(selectedPoint.name || "").trim();
+        syncActiveCookFilterBar();
+      }
+    }
+    renderMapPoints(mapPointsCache);
   } catch (error) {
     if (requestId !== mapRequestId) {
       return;
@@ -578,6 +793,7 @@ const resetFilters = () => {
   filters.search = "";
   filters.sort = "rating";
   filters.availableOnly = false;
+  activeCook = null;
 
   districtSelect.value = "all";
   priceInput.value = String(filters.maxPrice);
@@ -592,6 +808,7 @@ const resetFilters = () => {
     checkbox.checked = false;
   });
 
+  syncActiveCookFilterBar();
   fetchDishes();
   fetchMapPoints();
 };
@@ -630,8 +847,15 @@ const bindCheckoutPaymentInputs = () => {
 };
 
 const init = () => {
+  applyInitialFiltersFromUrl();
+  syncActiveCookFilterBar();
+  ensureLiveCookMap();
+
   priceValue.textContent = String(filters.maxPrice);
   priceInput.value = String(filters.maxPrice);
+  if (districtSelect) {
+    districtSelect.value = filters.district;
+  }
 
   priceInput.addEventListener("input", (event) => {
     filters.maxPrice = Number(event.target.value);
@@ -640,7 +864,13 @@ const init = () => {
   });
 
   districtSelect.addEventListener("change", (event) => {
-    filters.district = event.target.value;
+    const selectedDistrict = event.target.value;
+    const hasChanged = filters.district !== selectedDistrict;
+    filters.district = selectedDistrict;
+    if (hasChanged && activeCook) {
+      activeCook = null;
+      syncActiveCookFilterBar();
+    }
     fetchDishes();
     fetchMapPoints();
   });
@@ -659,6 +889,7 @@ const init = () => {
     availableOnlyInput.addEventListener("change", (event) => {
       filters.availableOnly = event.target.checked;
       fetchDishes();
+      fetchMapPoints();
     });
   }
 
@@ -672,6 +903,12 @@ const init = () => {
   resetButton.addEventListener("click", () => {
     resetFilters();
   });
+
+  if (clearCookFilterBtn) {
+    clearCookFilterBtn.addEventListener("click", () => {
+      clearActiveCook(true);
+    });
+  }
 
   if (clearCartBtn) {
     clearCartBtn.addEventListener("click", () => {

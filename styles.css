@@ -314,6 +314,18 @@ a {
   margin-bottom: 28px;
 }
 
+.active-cook-filter {
+  background: rgba(47, 111, 106, 0.12);
+  border: 1px solid rgba(47, 111, 106, 0.28);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .market-body {
   display: grid;
   grid-template-columns: 280px 1fr;
@@ -330,14 +342,47 @@ a {
   gap: 16px;
 }
 
+.map-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.4fr) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.live-cook-map {
+  min-height: 440px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: linear-gradient(180deg, #f5f8f4 0%, #edf1eb 100%);
+}
+
+.live-cook-map.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--muted);
+  padding: 20px;
+}
+
+.map-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .map-status {
   font-weight: 700;
 }
 
 .map-points {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 380px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .map-point {
@@ -364,6 +409,19 @@ a {
   color: var(--muted);
   font-size: 0.92rem;
   line-height: 1.5;
+}
+
+.map-point.active {
+  border: 1px solid rgba(47, 111, 106, 0.38);
+}
+
+.map-point-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.map-point-actions .btn {
+  width: 100%;
 }
 
 .filters {
@@ -829,6 +887,227 @@ a {
   color: var(--muted);
 }
 
+.orders-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.overview-card {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.overview-card strong {
+  font-family: "Unbounded", sans-serif;
+  font-size: 1.3rem;
+}
+
+.overview-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.orders-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.orders-panel {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.orders-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.orders-panel-head h3 {
+  margin: 0;
+}
+
+.orders-filter-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.orders-filter-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.orders-filter-form input,
+.orders-filter-form select {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.orders-empty {
+  background: var(--surface-alt);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--muted);
+}
+
+.order-card-view {
+  background: var(--surface-alt);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.order-sub {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.order-status {
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.order-status-new,
+.order-status-paid {
+  background: rgba(240, 122, 76, 0.16);
+  color: var(--accent-strong);
+}
+
+.order-status-accepted,
+.order-status-cooking,
+.order-status-ready,
+.order-status-delivering {
+  background: rgba(47, 111, 106, 0.16);
+  color: var(--accent-cool);
+}
+
+.order-status-completed {
+  background: rgba(58, 130, 57, 0.16);
+  color: #2d7d2c;
+}
+
+.order-status-cancelled {
+  background: rgba(132, 41, 31, 0.16);
+  color: #8e392f;
+}
+
+.order-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.order-meta-grid span {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.order-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.order-item-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.orders-items-empty {
+  color: var(--muted);
+}
+
+.orders-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.orders-timeline-empty {
+  color: var(--muted);
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+}
+
+.timeline-status {
+  font-weight: 700;
+}
+
+.timeline-time {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.timeline-meta {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.order-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+}
+
+.order-controls select,
+.order-controls input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
 .cook-layout {
   display: grid;
   grid-template-columns: 1.25fr 1fr;
@@ -1106,6 +1385,14 @@ a {
     order: -1;
   }
 
+  .map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .map-points {
+    max-height: none;
+  }
+
   .courier-card,
   .cta-card {
     flex-direction: column;
@@ -1121,7 +1408,14 @@ a {
   }
 
   .checkout-layout,
-  .reviews-layout {
+  .reviews-layout,
+  .orders-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .orders-filter-form,
+  .order-meta-grid,
+  .order-controls {
     grid-template-columns: 1fr;
   }
 }
@@ -1160,6 +1454,15 @@ a {
 
   .payment-grid {
     grid-template-columns: 1fr;
+  }
+
+  .active-cook-filter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .live-cook-map {
+    min-height: 340px;
   }
 }
 

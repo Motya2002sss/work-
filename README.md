@@ -11,6 +11,7 @@
 - Страница заказа блюда: `dish.html`, `dish.js`
 - Общая корзина клиента: `cart.js`
 - Кабинет повара: `cook.html`, `cook.js`
+- Экран заказов и трекинга: `orders.html`, `orders.js`
 - Backend: `backend/server.py` (Python stdlib, без внешних зависимостей)
 - Хранилище MVP: JSON-файлы в `backend/data`
 
@@ -29,15 +30,17 @@ http://127.0.0.1:8080
 ## API (MVP)
 
 - `GET /api/health` - проверка сервиса
-- `GET /api/dishes` - блюда с фильтрами (`district`, `categories`, `delivery`, `min_rating`, `max_price`, `search`, `sort`)
+- `GET /api/dishes` - блюда с фильтрами (`district`, `cook_id`, `categories`, `delivery`, `min_rating`, `max_price`, `search`, `sort`)
 - `POST /api/dishes` - публикация блюда поваром (multipart: фото, цена, граммовка)
 - `GET /api/dishes/<id>` - карточка блюда + повар + рекомендации
 - `GET /api/dishes/<id>/reviews` - отзывы по блюду
 - `GET /api/cooks` - список поваров
-- `GET /api/cooks/map` - точки поваров (`lat/lng`) для подключения карты
+- `GET /api/cooks/map` - точки поваров (`lat/lng`) + статистика меню (`dishes_count`, `available_dishes_count`, `min_price`)
 - `GET /api/cart/preview` - актуальные данные блюд для корзины
 - `GET /api/subscriptions` - тарифы подписки
 - `GET /api/orders` - список заказов
+- `GET /api/orders/<id>` - детали заказа
+- `POST /api/orders/<id>/status` - смена статуса заказа по pipeline
 - `GET /api/payments` - список платежей (тестовый провайдер)
 - `POST /api/orders` - создать заказ
 - `POST /api/checkout` - оформить заказ по корзине с оплатой картой
@@ -63,11 +66,13 @@ http://127.0.0.1:8080
 ├── index.html
 ├── dish.html
 ├── cook.html
+├── orders.html
 ├── styles.css
 ├── app.js
 ├── dish.js
 ├── cart.js
 ├── cook.js
+├── orders.js
 └── README.md
 ```
 
@@ -79,8 +84,9 @@ http://127.0.0.1:8080
 - Остатки и доступность блюд по времени
 - Корзина на несколько блюд и checkout одним заказом
 - Оплата картой внутри checkout (MVP mock-провайдер, без хранения полного PAN)
+- Трек статусов заказа и рабочая лента заказов для повара
 - Отзывы по блюдам с влиянием на рейтинг в выдаче
-- Подготовка к карте: точки поваров по районам Москвы
+- Интерактивная карта поваров с маркерами и быстрым переходом к меню выбранного повара
 - Повар может добавить блюдо с фото, граммовкой и своей ценой
 - Блоки подписки, верификации, рейтинга и доставки
 
