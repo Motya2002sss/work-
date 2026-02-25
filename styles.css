@@ -372,6 +372,56 @@ a {
   gap: 12px;
 }
 
+.map-tools,
+.map-geocode {
+  background: var(--surface-alt);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-tools-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.map-tools input,
+.map-geocode input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 11px;
+  font: inherit;
+  background: #fff;
+}
+
+.map-tools-status,
+.map-geocode-result {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.map-tools-status.ok,
+.map-geocode-result.ok {
+  color: var(--accent-cool);
+}
+
+.map-tools-status.warn,
+.map-geocode-result.warn {
+  color: var(--accent-strong);
+}
+
+.map-geocode-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
 .map-status {
   font-weight: 700;
 }
@@ -1391,6 +1441,10 @@ a {
 
   .map-points {
     max-height: none;
+  }
+
+  .map-geocode-row {
+    grid-template-columns: 1fr;
   }
 
   .courier-card,

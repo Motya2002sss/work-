@@ -14,7 +14,6 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&family=Unbounded:wght@400;600;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -349,6 +348,32 @@
             <div class="map-layout">
               <div id="liveCookMap" class="live-cook-map" aria-label="Карта поваров Москвы"></div>
               <div class="map-side">
+                <div class="map-tools">
+                  <label class="map-tools-field">
+                    Ключ Яндекс.Карт
+                    <input
+                      id="yandexApiKey"
+                      type="password"
+                      autocomplete="off"
+                      placeholder="Вставьте API-ключ Яндекс JS API"
+                    />
+                  </label>
+                  <button class="btn small" id="saveYandexApiKey" type="button">Подключить</button>
+                  <div class="map-tools-status" id="yandexApiStatus">
+                    Для живой карты и геокодирования нужен ваш API-ключ.
+                  </div>
+                </div>
+                <div class="map-geocode">
+                  <div class="map-geocode-row">
+                    <input
+                      id="mapGeoAddress"
+                      type="text"
+                      placeholder="Геокодирование: Москва, Таганская 1"
+                    />
+                    <button class="btn ghost small" id="mapGeoBtn" type="button">Найти</button>
+                  </div>
+                  <div class="map-geocode-result" id="mapGeoResult"></div>
+                </div>
                 <div class="map-status" id="mapStatus">Загружаем точки поваров...</div>
                 <div class="map-points" id="mapPoints"></div>
               </div>
@@ -588,7 +613,6 @@
     <div class="toast" id="toast">Заказ добавлен. Ожидайте подтверждения.</div>
 
     <script src="cart.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

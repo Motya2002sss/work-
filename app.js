@@ -22,6 +22,12 @@ const availableOnlyInput = document.getElementById("availableOnly");
 const mapPoints = document.getElementById("mapPoints");
 const mapStatus = document.getElementById("mapStatus");
 const liveCookMapNode = document.getElementById("liveCookMap");
+const yandexApiKeyInput = document.getElementById("yandexApiKey");
+const saveYandexApiKeyButton = document.getElementById("saveYandexApiKey");
+const yandexApiStatus = document.getElementById("yandexApiStatus");
+const mapGeoAddressInput = document.getElementById("mapGeoAddress");
+const mapGeoButton = document.getElementById("mapGeoBtn");
+const mapGeoResult = document.getElementById("mapGeoResult");
 const activeCookFilter = document.getElementById("activeCookFilter");
 const activeCookFilterName = document.getElementById("activeCookFilterName");
 const clearCookFilterBtn = document.getElementById("clearCookFilter");
@@ -40,8 +46,16 @@ const toast = document.getElementById("toast");
 let dishesRequestId = 0;
 let mapRequestId = 0;
 let mapPointsCache = [];
-let liveMapInstance = null;
-let liveMapLayer = null;
+let yandexMap = null;
+let yandexMapReady = false;
+let yandexLoadPromise = null;
+let yandexPlacemarks = [];
+let yandexSearchPlacemark = null;
+
+const MOSCOW_CENTER = [55.751244, 37.618423];
+const MAP_DEFAULT_ZOOM = 10;
+const MAP_COOK_ZOOM = 13;
+const DOMEDA_YANDEX_KEY_STORAGE = "domeda_yandex_api_key";
 
 const cartApi = window.DomEdaCart || {
   read: () => [],
@@ -164,31 +178,200 @@ const clearActiveCook = (withToast = false) => {
   }
 };
 
-const ensureLiveCookMap = () => {
+const readYandexApiKey = () => {
+  const fromInput = String(yandexApiKeyInput?.value || "").trim();
+  if (fromInput) {
+    return fromInput;
+  }
+
+  try {
+    return String(window.localStorage.getItem(DOMEDA_YANDEX_KEY_STORAGE) || "").trim();
+  } catch (error) {
+    return "";
+  }
+};
+
+const writeYandexApiKey = (value) => {
+  try {
+    if (!value) {
+      window.localStorage.removeItem(DOMEDA_YANDEX_KEY_STORAGE);
+      return;
+    }
+    window.localStorage.setItem(DOMEDA_YANDEX_KEY_STORAGE, value);
+  } catch (error) {
+    // ignore storage errors in private mode
+  }
+};
+
+const updateYandexStatus = (text, tone = "") => {
+  if (!yandexApiStatus) {
+    return;
+  }
+  yandexApiStatus.textContent = text;
+  yandexApiStatus.classList.remove("ok", "warn");
+  if (tone) {
+    yandexApiStatus.classList.add(tone);
+  }
+};
+
+const updateGeocodeResult = (text, tone = "") => {
+  if (!mapGeoResult) {
+    return;
+  }
+  mapGeoResult.textContent = text;
+  mapGeoResult.classList.remove("ok", "warn");
+  if (tone) {
+    mapGeoResult.classList.add(tone);
+  }
+};
+
+const setMapFallback = (text) => {
+  if (!liveCookMapNode) {
+    return;
+  }
+  liveCookMapNode.classList.add("fallback");
+  liveCookMapNode.textContent = text;
+};
+
+const loadYandexMapsApi = async (apiKey) => {
+  if (window.ymaps) {
+    return window.ymaps;
+  }
+  if (yandexLoadPromise) {
+    return yandexLoadPromise;
+  }
+
+  yandexLoadPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector("script[data-domeda-yandex='1']");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.ymaps), { once: true });
+      existing.addEventListener("error", () => reject(new Error("yandex_api_load_failed")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`;
+    script.async = true;
+    script.dataset.domedaYandex = "1";
+    script.onload = () => resolve(window.ymaps);
+    script.onerror = () => reject(new Error("yandex_api_load_failed"));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    yandexLoadPromise = null;
+    throw error;
+  });
+
+  return yandexLoadPromise;
+};
+
+const resetYandexMapState = () => {
+  if (yandexMap && typeof yandexMap.destroy === "function") {
+    yandexMap.destroy();
+  }
+  yandexMap = null;
+  yandexMapReady = false;
+  yandexPlacemarks = [];
+  yandexSearchPlacemark = null;
+  if (liveCookMapNode) {
+    liveCookMapNode.classList.remove("fallback");
+    liveCookMapNode.textContent = "";
+  }
+};
+
+const ensureLiveCookMap = async () => {
   if (!liveCookMapNode) {
     return null;
   }
-  if (liveMapInstance) {
-    return liveMapInstance;
+  if (yandexMapReady && yandexMap) {
+    return yandexMap;
   }
-  if (!window.L) {
-    liveCookMapNode.classList.add("fallback");
-    liveCookMapNode.textContent = "Карта недоступна, используйте список точек справа.";
+
+  const apiKey = readYandexApiKey();
+  if (!apiKey) {
+    updateYandexStatus("Укажите API-ключ Яндекс.Карт, чтобы включить живую карту.", "warn");
+    setMapFallback("Карта отключена: добавьте API-ключ Яндекс в панели справа.");
     return null;
   }
 
-  liveCookMapNode.classList.remove("fallback");
-  liveCookMapNode.textContent = "";
-  liveMapInstance = window.L.map(liveCookMapNode, {
-    zoomControl: true,
-  });
-  liveMapLayer = window.L.layerGroup().addTo(liveMapInstance);
-  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap",
-    maxZoom: 19,
-  }).addTo(liveMapInstance);
-  liveMapInstance.setView([55.751244, 37.618423], 10);
-  return liveMapInstance;
+  try {
+    await loadYandexMapsApi(apiKey);
+    await new Promise((resolve, reject) => {
+      if (!window.ymaps) {
+        reject(new Error("yandex_api_not_found"));
+        return;
+      }
+      window.ymaps.ready(() => {
+        try {
+          if (!yandexMap) {
+            liveCookMapNode.classList.remove("fallback");
+            liveCookMapNode.textContent = "";
+            yandexMap = new window.ymaps.Map(
+              liveCookMapNode,
+              {
+                center: MOSCOW_CENTER,
+                zoom: MAP_DEFAULT_ZOOM,
+                controls: ["zoomControl", "searchControl", "typeSelector"],
+              },
+              {
+                suppressMapOpenBlock: true,
+              }
+            );
+          }
+          yandexMapReady = true;
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    updateYandexStatus("Яндекс.Карты подключены.", "ok");
+    return yandexMap;
+  } catch (error) {
+    yandexMapReady = false;
+    updateYandexStatus("Не удалось подключить Яндекс.Карты. Проверьте API-ключ.", "warn");
+    setMapFallback("Ошибка подключения Яндекс.Карт. Проверьте ключ и попробуйте снова.");
+    return null;
+  }
+};
+
+const geocodeWithYandex = async (query) => {
+  if (!window.ymaps) {
+    throw new Error("yandex_api_not_loaded");
+  }
+  const result = await window.ymaps.geocode(query, { results: 1 });
+  const first = result.geoObjects.get(0);
+  if (!first) {
+    throw new Error("geocode_not_found");
+  }
+  const coords = first.geometry.getCoordinates();
+  let title = "";
+  if (typeof first.getAddressLine === "function") {
+    title = first.getAddressLine();
+  }
+  if (!title) {
+    title = String(first.properties.get("text") || first.properties.get("name") || query);
+  }
+  return {
+    coords,
+    title,
+  };
+};
+
+const focusMapOnDistrict = async () => {
+  if (filters.district === "all" || activeCook) {
+    return;
+  }
+  const map = await ensureLiveCookMap();
+  if (!map) {
+    return;
+  }
+
+  try {
+    const point = await geocodeWithYandex(`Москва, ${filters.district}`);
+    map.setCenter(point.coords, 11, { duration: 250 });
+  } catch (error) {
+    // keep previous position if district geocode failed
+  }
 };
 
 const formatPointPrice = (point) => {
@@ -221,19 +404,25 @@ const selectCookFromPoint = (point, shouldScroll) => {
 };
 
 const renderMapMarkers = (points) => {
-  const map = ensureLiveCookMap();
-  if (!map || !liveMapLayer) {
+  if (!yandexMapReady || !yandexMap || !window.ymaps) {
     return;
   }
 
-  liveMapLayer.clearLayers();
+  yandexPlacemarks.forEach((placemark) => {
+    yandexMap.geoObjects.remove(placemark);
+  });
+  yandexPlacemarks = [];
 
   if (!points.length) {
-    map.setView([55.751244, 37.618423], 10);
+    yandexMap.setCenter(MOSCOW_CENTER, MAP_DEFAULT_ZOOM, { duration: 250 });
     return;
   }
 
-  const bounds = [];
+  let minLat = Infinity;
+  let minLng = Infinity;
+  let maxLat = -Infinity;
+  let maxLng = -Infinity;
+
   points.forEach((point) => {
     const lat = numberValue(point.lat);
     const lng = numberValue(point.lng);
@@ -241,34 +430,55 @@ const renderMapMarkers = (points) => {
       return;
     }
 
-    const marker = window.L.marker([lat, lng]);
-    marker.bindPopup(
-      `
-        <strong>${escapeHtml(point.name)}</strong><br />
-        ${escapeHtml(point.district)}<br />
-        Рейтинг: ${numberValue(point.rating).toFixed(1)}<br />
-        Меню: ${numberValue(point.available_dishes_count)}/${numberValue(point.dishes_count)}<br />
-        ${formatPointPrice(point)}
-      `
+    minLat = Math.min(minLat, lat);
+    minLng = Math.min(minLng, lng);
+    maxLat = Math.max(maxLat, lat);
+    maxLng = Math.max(maxLng, lng);
+
+    const isActive = activeCook && numberValue(activeCook.id) === numberValue(point.id);
+    const marker = new window.ymaps.Placemark(
+      [lat, lng],
+      {
+        hintContent: escapeHtml(point.name),
+        balloonContentHeader: escapeHtml(point.name),
+        balloonContentBody: `
+          ${escapeHtml(point.district)}<br />
+          Рейтинг: ${numberValue(point.rating).toFixed(1)}<br />
+          Меню: ${numberValue(point.available_dishes_count)}/${numberValue(point.dishes_count)}<br />
+          ${formatPointPrice(point)}
+        `,
+      },
+      {
+        preset: isActive ? "islands#darkGreenDotIcon" : "islands#orangeDotIcon",
+      }
     );
-    marker.on("click", () => {
+    marker.events.add("click", () => {
       selectCookFromPoint(point, true);
     });
-    marker.addTo(liveMapLayer);
-    bounds.push([lat, lng]);
+    yandexMap.geoObjects.add(marker);
+    yandexPlacemarks.push(marker);
 
-    if (activeCook && numberValue(activeCook.id) === numberValue(point.id)) {
-      marker.openPopup();
-      map.setView([lat, lng], 12);
+    if (isActive) {
+      yandexMap.setCenter([lat, lng], MAP_COOK_ZOOM, { duration: 250 });
+      marker.balloon.open();
     }
   });
 
-  if (!bounds.length) {
+  if (!Number.isFinite(minLat)) {
     return;
   }
 
   if (!activeCook) {
-    map.fitBounds(bounds, { padding: [25, 25] });
+    yandexMap.setBounds(
+      [
+        [minLat, minLng],
+        [maxLat, maxLng],
+      ],
+      {
+        checkZoomRange: true,
+        zoomMargin: 30,
+      }
+    );
   }
 };
 
@@ -546,6 +756,97 @@ const fetchMapPoints = async () => {
       return;
     }
     renderMapError();
+  }
+};
+
+const runYandexGeocodeSearch = async () => {
+  const rawQuery = String(mapGeoAddressInput?.value || "").trim();
+  if (!rawQuery) {
+    updateGeocodeResult("Введите адрес для геокодирования.", "warn");
+    return;
+  }
+
+  const map = await ensureLiveCookMap();
+  if (!map) {
+    updateGeocodeResult("Карта не подключена: сначала сохраните API-ключ.", "warn");
+    return;
+  }
+
+  try {
+    const fullQuery = rawQuery.toLowerCase().includes("москва")
+      ? rawQuery
+      : `Москва, ${rawQuery}`;
+    const point = await geocodeWithYandex(fullQuery);
+    if (yandexSearchPlacemark) {
+      yandexMap.geoObjects.remove(yandexSearchPlacemark);
+    }
+    yandexSearchPlacemark = new window.ymaps.Placemark(
+      point.coords,
+      {
+        balloonContentHeader: "Результат геокодирования",
+        balloonContentBody: escapeHtml(point.title),
+      },
+      {
+        preset: "islands#greenDotIcon",
+      }
+    );
+    yandexMap.geoObjects.add(yandexSearchPlacemark);
+    yandexMap.setCenter(point.coords, 14, { duration: 250 });
+    yandexSearchPlacemark.balloon.open();
+    updateGeocodeResult(point.title, "ok");
+  } catch (error) {
+    updateGeocodeResult("Адрес не найден. Попробуйте уточнить запрос.", "warn");
+  }
+};
+
+const bindYandexMapControls = () => {
+  const savedKey = readYandexApiKey();
+  if (yandexApiKeyInput && savedKey) {
+    yandexApiKeyInput.value = savedKey;
+  }
+  if (savedKey) {
+    updateYandexStatus("Ключ найден. Подключаем карту.", "ok");
+  } else {
+    updateYandexStatus("Для карты и геокодирования нужен API-ключ Яндекс.", "warn");
+  }
+
+  if (saveYandexApiKeyButton) {
+    saveYandexApiKeyButton.addEventListener("click", async () => {
+      const key = String(yandexApiKeyInput?.value || "").trim();
+      if (!key) {
+        writeYandexApiKey("");
+        resetYandexMapState();
+        updateYandexStatus("Ключ очищен. Карта отключена.", "warn");
+        setMapFallback("Карта отключена: добавьте API-ключ Яндекс в панели справа.");
+        updateGeocodeResult("Геокодирование отключено: сохраните API-ключ Яндекс.", "warn");
+        return;
+      }
+
+      writeYandexApiKey(key);
+      updateYandexStatus("Подключаем Яндекс.Карты...", "");
+      resetYandexMapState();
+      const map = await ensureLiveCookMap();
+      if (!map) {
+        return;
+      }
+      renderMapMarkers(mapPointsCache);
+      await focusMapOnDistrict();
+      showToast("Яндекс.Карты подключены");
+    });
+  }
+
+  if (mapGeoButton) {
+    mapGeoButton.addEventListener("click", () => {
+      runYandexGeocodeSearch();
+    });
+  }
+  if (mapGeoAddressInput) {
+    mapGeoAddressInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        runYandexGeocodeSearch();
+      }
+    });
   }
 };
 
@@ -846,10 +1147,17 @@ const bindCheckoutPaymentInputs = () => {
   }
 };
 
-const init = () => {
+const init = async () => {
   applyInitialFiltersFromUrl();
   syncActiveCookFilterBar();
-  ensureLiveCookMap();
+  bindYandexMapControls();
+
+  const map = await ensureLiveCookMap();
+  if (map) {
+    updateGeocodeResult("Геокодирование готово: введите адрес и нажмите «Найти».");
+  } else {
+    updateGeocodeResult("Подключите API-ключ Яндекс, чтобы включить геокодирование.", "warn");
+  }
 
   priceValue.textContent = String(filters.maxPrice);
   priceInput.value = String(filters.maxPrice);
@@ -873,6 +1181,7 @@ const init = () => {
     }
     fetchDishes();
     fetchMapPoints();
+    focusMapOnDistrict();
   });
 
   sortSelect.addEventListener("change", (event) => {
@@ -931,8 +1240,9 @@ const init = () => {
 
   fetchDishes();
   fetchMapPoints();
+  focusMapOnDistrict();
   renderCart();
   updateCartButton();
 };
 
-init();
+void init();
