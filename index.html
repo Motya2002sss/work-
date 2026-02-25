@@ -262,6 +262,67 @@
                   Комментарий
                   <textarea name="comment" rows="3" placeholder="Пожелания к заказу"></textarea>
                 </label>
+
+                <div class="payment-box">
+                  <div class="payment-title">Оплата картой</div>
+                  <p class="payment-note">
+                    Тестовый платеж внутри MVP. Полный номер карты не сохраняется.
+                  </p>
+                  <label>
+                    Держатель карты
+                    <input name="card_holder" type="text" required placeholder="IVAN IVANOV" />
+                  </label>
+                  <label>
+                    Номер карты
+                    <input
+                      id="checkoutCardNumber"
+                      name="card_number"
+                      type="text"
+                      inputmode="numeric"
+                      autocomplete="cc-number"
+                      required
+                      placeholder="4111 1111 1111 1111"
+                    />
+                  </label>
+                  <div class="payment-grid">
+                    <label>
+                      Месяц
+                      <input
+                        id="checkoutExpMonth"
+                        name="exp_month"
+                        type="number"
+                        min="1"
+                        max="12"
+                        required
+                        placeholder="12"
+                      />
+                    </label>
+                    <label>
+                      Год
+                    <input
+                      id="checkoutExpYear"
+                      name="exp_year"
+                      type="number"
+                      min="2024"
+                      max="2100"
+                      required
+                      placeholder="2030"
+                    />
+                    </label>
+                    <label>
+                      CVC
+                      <input
+                        id="checkoutCvc"
+                        name="cvc"
+                        type="password"
+                        inputmode="numeric"
+                        autocomplete="cc-csc"
+                        required
+                        placeholder="123"
+                      />
+                    </label>
+                  </div>
+                </div>
                 <button class="btn full" type="submit">Оформить заказ</button>
               </form>
             </article>

@@ -89,6 +89,25 @@ def write_orders(orders: List[Dict[str, Any]]) -> None:
         json.dump(orders, handle, ensure_ascii=False, indent=2)
 
 
+def read_payments() -> List[Dict[str, Any]]:
+    runtime_file = RUNTIME_DIR / "payments.json"
+    if runtime_file.exists():
+        try:
+            with runtime_file.open("r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except (json.JSONDecodeError, OSError):
+            return []
+
+    return read_json("payments.json", [])
+
+
+def write_payments(payments: List[Dict[str, Any]]) -> None:
+    runtime_file = RUNTIME_DIR / "payments.json"
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    with runtime_file.open("w", encoding="utf-8") as handle:
+        json.dump(payments, handle, ensure_ascii=False, indent=2)
+
+
 def read_reviews() -> List[Dict[str, Any]]:
     runtime_file = RUNTIME_DIR / "reviews.json"
     if runtime_file.exists():
@@ -125,6 +144,10 @@ def next_order_id(orders: List[Dict[str, Any]]) -> str:
     return f"ORD-{datetime.now().strftime('%Y%m%d')}-{len(orders) + 1:04d}"
 
 
+def next_payment_id(payments: List[Dict[str, Any]]) -> str:
+    return f"PAY-{datetime.now().strftime('%Y%m%d')}-{len(payments) + 1:04d}"
+
+
 def safe_int(value: str, fallback: int) -> int:
     try:
         return int(value)
@@ -134,6 +157,43 @@ def safe_int(value: str, fallback: int) -> int:
 
 def round_rating(value: float) -> float:
     return round(value + 1e-8, 2)
+
+
+def digits_only(value: Any) -> str:
+    return "".join(char for char in clean_str(value) if char.isdigit())
+
+
+def mask_card_number(value: str) -> str:
+    if len(value) < 8:
+        return ""
+    return f"{value[:4]} **** **** {value[-4:]}"
+
+
+def card_brand(value: str) -> str:
+    if value.startswith("4"):
+        return "VISA"
+    if value.startswith(("51", "52", "53", "54", "55")):
+        return "MASTERCARD"
+    if value.startswith(("34", "37")):
+        return "AMEX"
+    if value.startswith("2200"):
+        return "MIR"
+    return "CARD"
+
+
+def valid_card_luhn(value: str) -> bool:
+    if not value or not value.isdigit():
+        return False
+    checksum = 0
+    parity = len(value) % 2
+    for index, char in enumerate(value):
+        digit = int(char)
+        if index % 2 == parity:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        checksum += digit
+    return checksum % 10 == 0
 
 
 def clean_str(value: Any) -> str:
@@ -503,6 +563,12 @@ class AppHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, {"items": orders, "total": len(orders)})
             return
 
+        if path == "/api/payments":
+            payments = read_payments()
+            payments.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+            self.send_json(HTTPStatus.OK, {"items": payments, "total": len(payments)})
+            return
+
         self.send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
 
     def find_dish_cook(self, dish: Dict[str, Any], cooks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -754,6 +820,71 @@ class AppHandler(BaseHTTPRequestHandler):
 
         return validated, None
 
+    def validate_payment_payload(self, payload: Dict[str, Any], expected_amount: int) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+        payment = payload.get("payment")
+        if not isinstance(payment, dict):
+            return None, "payment_required"
+
+        method = clean_str(payment.get("method")).lower()
+        if method != "card":
+            return None, "payment_method_not_supported"
+
+        card_number = digits_only(payment.get("card_number"))
+        exp_month = safe_int(str(payment.get("exp_month", 0)), 0)
+        exp_year = safe_int(str(payment.get("exp_year", 0)), 0)
+        cvc = digits_only(payment.get("cvc"))
+        holder = clean_str(payment.get("holder"))
+
+        if len(card_number) < 13 or len(card_number) > 19:
+            return None, "card_number_invalid"
+        if not valid_card_luhn(card_number):
+            return None, "card_number_invalid"
+        if exp_month < 1 or exp_month > 12:
+            return None, "card_expiry_invalid"
+        if exp_year < 2000 or exp_year > 2100:
+            return None, "card_expiry_invalid"
+        if len(cvc) < 3 or len(cvc) > 4:
+            return None, "card_cvc_invalid"
+        if len(holder) < 2:
+            return None, "card_holder_invalid"
+
+        now = datetime.now()
+        if exp_year < now.year or (exp_year == now.year and exp_month < now.month):
+            return None, "card_expired"
+
+        return (
+            {
+                "method": "card",
+                "card_brand": card_brand(card_number),
+                "card_masked": mask_card_number(card_number),
+                "card_last4": card_number[-4:],
+                "holder": holder,
+                "amount": expected_amount,
+                "currency": "RUB",
+            },
+            None,
+        )
+
+    def create_payment_record(self, order_id: str, payment_data: Dict[str, Any]) -> Dict[str, Any]:
+        payments = read_payments()
+        payment = {
+            "id": next_payment_id(payments),
+            "order_id": order_id,
+            "status": "captured",
+            "provider": "domeda_pay_mock",
+            "method": payment_data.get("method", "card"),
+            "card_brand": payment_data.get("card_brand", "CARD"),
+            "card_masked": payment_data.get("card_masked", ""),
+            "card_last4": payment_data.get("card_last4", ""),
+            "holder": payment_data.get("holder", ""),
+            "amount": payment_data.get("amount", 0),
+            "currency": payment_data.get("currency", "RUB"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        payments.append(payment)
+        write_payments(payments)
+        return payment
+
     def handle_checkout(self) -> None:
         payload = self.read_json_body()
         raw_dishes = read_dishes()
@@ -791,6 +922,11 @@ class AppHandler(BaseHTTPRequestHandler):
                 }
             )
 
+        payment_data, payment_error = self.validate_payment_payload(payload, total)
+        if payment_error:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": payment_error})
+            return
+
         for row in checkout_rows:
             dish = row["dish"]
             qty = row["qty"]
@@ -811,7 +947,7 @@ class AppHandler(BaseHTTPRequestHandler):
             "address": clean_str(payload.get("address")),
             "comment": clean_str(payload.get("comment")),
             "delivery_mode": delivery_mode,
-            "status": "new",
+            "status": "paid",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         order["districts"] = sorted(
@@ -821,10 +957,20 @@ class AppHandler(BaseHTTPRequestHandler):
                 if clean_str(item["dish"].get("district", ""))
             }
         )
+        payment = self.create_payment_record(order["id"], payment_data or {})
+        order["payment_id"] = payment.get("id")
+        order["payment_status"] = payment.get("status")
+        order["payment_summary"] = {
+            "method": payment.get("method"),
+            "card_brand": payment.get("card_brand"),
+            "card_masked": payment.get("card_masked"),
+            "amount": payment.get("amount"),
+            "currency": payment.get("currency"),
+        }
         orders.append(order)
         write_orders(orders)
 
-        self.send_json(HTTPStatus.CREATED, {"order": order})
+        self.send_json(HTTPStatus.CREATED, {"order": order, "payment": payment})
 
     def handle_create_review(self) -> None:
         payload = self.read_json_body()
@@ -1088,7 +1234,7 @@ def run() -> None:
     print(
         "Endpoints: /api/health, /api/dishes (GET/POST), /api/dishes/<id>, "
         "/api/dishes/<id>/reviews, /api/reviews, /api/cart/preview, /api/checkout, "
-        "/api/cooks, /api/cooks/map, /api/subscriptions, /api/orders"
+        "/api/cooks, /api/cooks/map, /api/subscriptions, /api/orders, /api/payments"
     )
 
     try:

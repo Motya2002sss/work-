@@ -25,6 +25,10 @@ const cartItemsNode = document.getElementById("cartItems");
 const cartSummaryNode = document.getElementById("cartSummary");
 const checkoutForm = document.getElementById("checkoutForm");
 const clearCartBtn = document.getElementById("clearCartBtn");
+const checkoutCardNumberInput = document.getElementById("checkoutCardNumber");
+const checkoutExpMonthInput = document.getElementById("checkoutExpMonth");
+const checkoutExpYearInput = document.getElementById("checkoutExpYear");
+const checkoutCvcInput = document.getElementById("checkoutCvc");
 const toast = document.getElementById("toast");
 
 let dishesRequestId = 0;
@@ -68,6 +72,18 @@ const showToast = (text) => {
     toast.classList.remove("show");
   }, 3200);
 };
+
+const normalizeCardNumber = (value) => String(value || "").replace(/\D/g, "").slice(0, 19);
+
+const formatCardNumber = (digits) => {
+  const groups = [];
+  for (let i = 0; i < digits.length; i += 4) {
+    groups.push(digits.slice(i, i + 4));
+  }
+  return groups.join(" ");
+};
+
+const normalizeCvc = (value) => String(value || "").replace(/\D/g, "").slice(0, 4);
 
 const escapeHtml = (value) => {
   const div = document.createElement("div");
@@ -348,8 +364,52 @@ const cartErrorMessage = (code) => {
     dish_stock_not_enough: "Недостаточно порций по одному из блюд.",
     delivery_mode_not_available: "Для одного из блюд выбранный тип доставки недоступен.",
     delivery_mode_invalid: "Проверьте способ доставки.",
+    payment_required: "Данные карты обязательны.",
+    payment_method_not_supported: "Поддерживается только оплата картой.",
+    card_number_invalid: "Проверьте номер карты.",
+    card_expiry_invalid: "Проверьте срок действия карты.",
+    card_expired: "Срок действия карты истек.",
+    card_cvc_invalid: "Проверьте CVC код.",
+    card_holder_invalid: "Проверьте имя держателя карты.",
   };
   return map[code] || "Не удалось оформить заказ. Повторите попытку.";
+};
+
+const validateCheckoutPaymentFields = (formData) => {
+  const holder = String(formData.get("card_holder") || "").trim();
+  const cardNumber = normalizeCardNumber(formData.get("card_number"));
+  const expMonth = Number(formData.get("exp_month"));
+  const expYear = Number(formData.get("exp_year"));
+  const cvc = normalizeCvc(formData.get("cvc"));
+
+  if (holder.length < 2) {
+    return { ok: false, message: "Укажите имя держателя карты" };
+  }
+  if (cardNumber.length < 13 || cardNumber.length > 19) {
+    return { ok: false, message: "Проверьте номер карты" };
+  }
+  if (!Number.isFinite(expMonth) || expMonth < 1 || expMonth > 12) {
+    return { ok: false, message: "Проверьте месяц срока карты" };
+  }
+  const currentYear = new Date().getFullYear();
+  if (!Number.isFinite(expYear) || expYear < currentYear || expYear > 2100) {
+    return { ok: false, message: "Проверьте год срока карты" };
+  }
+  if (cvc.length < 3 || cvc.length > 4) {
+    return { ok: false, message: "Проверьте CVC" };
+  }
+
+  return {
+    ok: true,
+    payment: {
+      method: "card",
+      holder,
+      card_number: cardNumber,
+      exp_month: expMonth,
+      exp_year: expYear,
+      cvc,
+    },
+  };
 };
 
 const renderCart = async () => {
@@ -441,6 +501,11 @@ const submitCheckout = async (event) => {
 
   const formData = new FormData(checkoutForm);
   const deliveryMode = String(formData.get("delivery_mode") || "pickup");
+  const paymentValidation = validateCheckoutPaymentFields(formData);
+  if (!paymentValidation.ok) {
+    showToast(paymentValidation.message);
+    return;
+  }
 
   const payload = {
     items: items.map((item) => ({ dish_id: item.id, qty: item.qty })),
@@ -450,6 +515,7 @@ const submitCheckout = async (event) => {
     comment: String(formData.get("comment") || ""),
     delivery_mode: deliveryMode,
     city: "Москва",
+    payment: paymentValidation.payment,
   };
 
   const submitButton = checkoutForm.querySelector("button[type=submit]");
@@ -470,8 +536,14 @@ const submitCheckout = async (event) => {
 
     cartApi.clear();
     checkoutForm.reset();
+    if (checkoutCardNumberInput) {
+      checkoutCardNumberInput.value = "";
+    }
+    if (checkoutCvcInput) {
+      checkoutCvcInput.value = "";
+    }
     syncCheckoutAddressControl();
-    showToast(`Заказ ${result.order.id} оформлен`);
+    showToast(`Оплата прошла. Заказ ${result.order.id} оформлен`);
 
     fetchDishes();
     fetchMapPoints();
@@ -522,6 +594,39 @@ const resetFilters = () => {
 
   fetchDishes();
   fetchMapPoints();
+};
+
+const bindCheckoutPaymentInputs = () => {
+  if (checkoutCardNumberInput) {
+    checkoutCardNumberInput.addEventListener("input", (event) => {
+      const digits = normalizeCardNumber(event.target.value);
+      event.target.value = formatCardNumber(digits);
+    });
+  }
+
+  if (checkoutCvcInput) {
+    checkoutCvcInput.addEventListener("input", (event) => {
+      event.target.value = normalizeCvc(event.target.value);
+    });
+  }
+
+  if (checkoutExpMonthInput) {
+    checkoutExpMonthInput.addEventListener("input", (event) => {
+      const month = Math.max(1, Math.min(12, Number(event.target.value) || 0));
+      if (event.target.value !== "") {
+        event.target.value = String(month);
+      }
+    });
+  }
+
+  if (checkoutExpYearInput) {
+    checkoutExpYearInput.addEventListener("input", (event) => {
+      const year = Number(event.target.value) || 0;
+      if (year > 2100) {
+        event.target.value = "2100";
+      }
+    });
+  }
 };
 
 const init = () => {
@@ -580,6 +685,7 @@ const init = () => {
       radio.addEventListener("change", syncCheckoutAddressControl);
     });
     syncCheckoutAddressControl();
+    bindCheckoutPaymentInputs();
   }
 
   window.addEventListener("domeda-cart-updated", () => {
