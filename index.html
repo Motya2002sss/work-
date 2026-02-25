@@ -26,8 +26,10 @@
         <nav class="nav">
           <a href="#market">Витрина</a>
           <a href="#cook-map">Карта</a>
+          <a href="#customer-flow">Заказчику</a>
+          <a href="#cook-flow">Повару</a>
+          <a href="#courier-flow">Курьеру</a>
           <a href="/orders.html">Заказы</a>
-          <a href="#cooks">Повара</a>
           <a href="#subscription">Подписка</a>
           <a href="#safety">Безопасность</a>
         </nav>
@@ -438,34 +440,129 @@
           </div>
         </section>
 
-        <section class="section how">
+        <section id="roles" class="section roles">
           <div class="section-head">
             <div>
-              <h2>Как это работает</h2>
-              <p>Две роли — повар и покупатель. Все просто.</p>
+              <h2>Разделы платформы</h2>
+              <p>Отдельные сценарии для заказчика, повара и курьера.</p>
             </div>
           </div>
-          <div class="how-grid">
-            <div class="how-card">
-              <div class="how-title">Для повара</div>
-              <ol>
-                <li>Проходите верификацию и оформляете подписку.</li>
-                <li>Добавляете блюда, фото, цены и время готовности.</li>
-                <li>Получаете заказы и выбираете способ доставки.</li>
-                <li>Поднимаетесь в выдаче по рейтингу и скорости.</li>
-              </ol>
-              <a class="btn small" href="/cook.html">Стать поваром</a>
-            </div>
-            <div class="how-card">
-              <div class="how-title">Для покупателя</div>
-              <ol>
-                <li>Выбираете блюдо и район в Москве.</li>
-                <li>Смотрите рейтинг и отзывы повара.</li>
-                <li>Оплачиваете и выбираете доставку.</li>
-                <li>Получаете горячую еду без ресторанных наценок.</li>
-              </ol>
-              <button class="btn small ghost">Скачать приложение</button>
-            </div>
+          <div class="roles-switch" id="rolesSwitch">
+            <button class="role-switch-btn is-active" type="button" data-role-target="customer">
+              Заказчик
+            </button>
+            <button class="role-switch-btn" type="button" data-role-target="cook">Повар</button>
+            <button class="role-switch-btn" type="button" data-role-target="courier">
+              Курьер
+            </button>
+          </div>
+          <div class="roles-panels">
+            <article
+              id="customer-flow"
+              class="role-panel is-active"
+              data-role-panel="customer"
+              data-role-anchor
+            >
+              <div class="role-panel-main">
+                <div class="role-panel-title">Для заказчика</div>
+                <p>
+                  Быстрый выбор домашней еды по району Москвы: карта поваров, рейтинг, фото блюд,
+                  остатки порций и удобный checkout.
+                </p>
+                <ul class="role-list">
+                  <li>Витрина блюд + фильтры по цене, доставке и рейтингу.</li>
+                  <li>Карта с точками поваров и геокодированием адреса.</li>
+                  <li>Корзина и оплата картой в одном заказе.</li>
+                  <li>Трекинг статуса заказа на отдельной странице.</li>
+                </ul>
+              </div>
+              <div class="role-panel-side">
+                <div class="role-kpi-grid">
+                  <div class="role-kpi">
+                    <strong>3 шага</strong>
+                    <span>Выбор → Оплата → Трекинг</span>
+                  </div>
+                  <div class="role-kpi">
+                    <strong>100%</strong>
+                    <span>Прозрачные цены от повара</span>
+                  </div>
+                </div>
+                <div class="role-actions">
+                  <a class="btn small" href="#market">Перейти в витрину</a>
+                  <a class="btn small ghost" href="/orders.html">Отследить заказ</a>
+                </div>
+              </div>
+            </article>
+
+            <article id="cook-flow" class="role-panel" data-role-panel="cook" data-role-anchor hidden>
+              <div class="role-panel-main">
+                <div class="role-panel-title">Для повара</div>
+                <p>
+                  Кабинет повара с публикацией блюд, фотографиями, граммовкой, настройкой доставки
+                  и управлением заказами по этапам.
+                </p>
+                <ul class="role-list">
+                  <li>Публикация блюд: фото, граммовка, цена и наличие.</li>
+                  <li>Выбор способов выдачи: самовывоз, доставка поваром, курьер.</li>
+                  <li>Работа со статусами заказа: принят, готовится, готов, доставлен.</li>
+                  <li>Рост в топе по рейтингу и активной подписке.</li>
+                </ul>
+              </div>
+              <div class="role-panel-side">
+                <div class="role-kpi-grid">
+                  <div class="role-kpi">
+                    <strong>1 кабинет</strong>
+                    <span>Меню + заказы + верификация</span>
+                  </div>
+                  <div class="role-kpi">
+                    <strong>24/7</strong>
+                    <span>Гибкое время работы из дома</span>
+                  </div>
+                </div>
+                <div class="role-actions">
+                  <a class="btn small" href="/cook.html">Открыть кабинет повара</a>
+                  <a class="btn small ghost" href="/orders.html">Управлять заказами</a>
+                </div>
+              </div>
+            </article>
+
+            <article
+              id="courier-flow"
+              class="role-panel"
+              data-role-panel="courier"
+              data-role-anchor
+              hidden
+            >
+              <div class="role-panel-main">
+                <div class="role-panel-title">Для курьера</div>
+                <p>
+                  Отдельный поток под доставку на день: курьер подключается к заказам поваров,
+                  получает маршрут и подтверждает завершение доставки.
+                </p>
+                <ul class="role-list">
+                  <li>Бронирование смены курьера на один день.</li>
+                  <li>Привязка заказов поваров к текущей смене.</li>
+                  <li>Контроль статусов: принят, в пути, завершен.</li>
+                  <li>Скидки по тарифам повара (Pro/Studio).</li>
+                </ul>
+              </div>
+              <div class="role-panel-side">
+                <div class="role-kpi-grid">
+                  <div class="role-kpi">
+                    <strong>1 день</strong>
+                    <span>Гибкая аренда без долгих контрактов</span>
+                  </div>
+                  <div class="role-kpi">
+                    <strong>3 статуса</strong>
+                    <span>Прозрачный контроль доставки</span>
+                  </div>
+                </div>
+                <div class="role-actions">
+                  <a class="btn small" href="#subscription">Тарифы и скидки</a>
+                  <a class="btn small ghost" href="#cook-flow">Найти повара</a>
+                </div>
+              </div>
+            </article>
           </div>
         </section>
 

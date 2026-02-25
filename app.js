@@ -28,6 +28,8 @@ const yandexApiStatus = document.getElementById("yandexApiStatus");
 const mapGeoAddressInput = document.getElementById("mapGeoAddress");
 const mapGeoButton = document.getElementById("mapGeoBtn");
 const mapGeoResult = document.getElementById("mapGeoResult");
+const roleSwitchButtons = [...document.querySelectorAll("[data-role-target]")];
+const rolePanels = [...document.querySelectorAll("[data-role-panel]")];
 const activeCookFilter = document.getElementById("activeCookFilter");
 const activeCookFilterName = document.getElementById("activeCookFilterName");
 const clearCookFilterBtn = document.getElementById("clearCookFilter");
@@ -56,6 +58,11 @@ const MOSCOW_CENTER = [55.751244, 37.618423];
 const MAP_DEFAULT_ZOOM = 10;
 const MAP_COOK_ZOOM = 13;
 const DOMEDA_YANDEX_KEY_STORAGE = "domeda_yandex_api_key";
+const ROLE_ANCHOR_BY_KEY = {
+  customer: "customer-flow",
+  cook: "cook-flow",
+  courier: "courier-flow",
+};
 
 const cartApi = window.DomEdaCart || {
   read: () => [],
@@ -176,6 +183,87 @@ const clearActiveCook = (withToast = false) => {
   if (withToast) {
     showToast("Фильтр повара сброшен");
   }
+};
+
+const roleKeyFromHash = (hashValue) => {
+  const hash = String(hashValue || "").replace(/^#/, "");
+  if (!hash) {
+    return "";
+  }
+  const pair = Object.entries(ROLE_ANCHOR_BY_KEY).find(([, anchor]) => anchor === hash);
+  return pair ? pair[0] : "";
+};
+
+const setActiveRolePanel = (roleKey, updateHash = false) => {
+  if (!ROLE_ANCHOR_BY_KEY[roleKey]) {
+    return;
+  }
+
+  roleSwitchButtons.forEach((button) => {
+    const isActive = button.dataset.roleTarget === roleKey;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+
+  rolePanels.forEach((panel) => {
+    const isActive = panel.dataset.rolePanel === roleKey;
+    panel.classList.toggle("is-active", isActive);
+    panel.hidden = !isActive;
+  });
+
+  if (!updateHash) {
+    return;
+  }
+
+  const anchor = ROLE_ANCHOR_BY_KEY[roleKey];
+  if (!anchor) {
+    return;
+  }
+  if (window.location.hash !== `#${anchor}`) {
+    window.history.replaceState(null, "", `#${anchor}`);
+  }
+};
+
+const bindRoleSections = () => {
+  if (!roleSwitchButtons.length || !rolePanels.length) {
+    return;
+  }
+
+  roleSwitchButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", button.classList.contains("is-active") ? "true" : "false");
+    button.addEventListener("click", () => {
+      const targetRole = String(button.dataset.roleTarget || "");
+      setActiveRolePanel(targetRole, true);
+    });
+  });
+
+  const applyRoleFromLocation = () => {
+    const hashRole = roleKeyFromHash(window.location.hash);
+    if (hashRole) {
+      setActiveRolePanel(hashRole);
+      return;
+    }
+    const queryRole = String(new URLSearchParams(window.location.search).get("role") || "").trim();
+    if (ROLE_ANCHOR_BY_KEY[queryRole]) {
+      setActiveRolePanel(queryRole);
+      return;
+    }
+    setActiveRolePanel("customer");
+  };
+
+  window.addEventListener("hashchange", () => {
+    const hashRole = roleKeyFromHash(window.location.hash);
+    if (hashRole) {
+      setActiveRolePanel(hashRole);
+      const anchor = ROLE_ANCHOR_BY_KEY[hashRole];
+      const panel = anchor ? document.getElementById(anchor) : null;
+      if (panel) {
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  });
+
+  applyRoleFromLocation();
 };
 
 const readYandexApiKey = () => {
@@ -1150,6 +1238,7 @@ const bindCheckoutPaymentInputs = () => {
 const init = async () => {
   applyInitialFiltersFromUrl();
   syncActiveCookFilterBar();
+  bindRoleSections();
   bindYandexMapControls();
 
   const map = await ensureLiveCookMap();
